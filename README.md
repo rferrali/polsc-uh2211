@@ -47,8 +47,10 @@ If you decide to do so, the general steps are:
     - [RStudio](https://posit.co/download/rstudio-desktop/)
     - [VS Code](https://code.visualstudio.com/)
     - [Positron](https://positron.posit.co/) (recommended)
-4. Clone this repository to your computer using GitHub Desktop
-5. Open the repository folder in your IDE of choice and start working!
+4. Install [Quarto](https://quarto.org/docs/get-started/), to render lecture notes and assignments.
+    - If you want to render PDFs, don't forget to install LaTeX -- instructions [here](https://quarto.org/docs/output-formats/pdf-engine.html)
+5. Clone this repository to your computer using GitHub Desktop
+6. Open the repository folder in your IDE of choice and start working!
 
 Please come to office hours or talk to me after class if you need help with this step.
 
