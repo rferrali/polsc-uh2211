@@ -2,6 +2,14 @@
 ## Lecture 2: Object types, datasets ##
 #######################################
 
+## Git and GitHub -------------------------------
+
+# commits
+
+# reverting back to previous versions of your code
+
+# syncing code from the repository to your local machine
+
 ## Object types -------------------------------
 
 # numeric
