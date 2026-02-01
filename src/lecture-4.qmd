@@ -54,9 +54,9 @@ If she'd picked at random, she would have had a 1.4% chance of getting all eight
 1. It is unlikely that she got all eight cups correct by chance
 2. Therefore, she probably really could tell the difference between the two types of cups.
 
-> The **null hypothesis** is the default assumption that there is no effect or no difference. Here, the null hypothesis is that the lady cannot tell the difference between the two types of cups, and is just guessing.
+> **Definition.** The **null hypothesis** is the default assumption that there is no effect or no difference. 
 
-The null hypothesis is unlikely given the data, so we reject it.
+Here, the null hypothesis is that the lady cannot tell the difference between the two types of cups, and is just guessing. The null hypothesis is unlikely given the data, so we reject it.
 
 # How do we generalize this? 
 
@@ -98,7 +98,7 @@ $$
 
 Here, we can use the idea of a **p-value**. 
 
-> The p-value is the probability of getting results at least as extreme as the observed results, assuming that the null hypothesis is true. 
+> **Definition.**  The p-value is the probability of getting results at least as extreme as the observed results, assuming that the null hypothesis is true. 
 
 Here, "at least as extreme" means getting 7 or more cups correct. 
 
@@ -130,7 +130,9 @@ Why? Let's do this step by step. For the sake of the argument, let's say we want
 $$
 8 \times 7 \times 6 = \frac{8!}{5!} \quad \text{which generalizes to} \quad \frac{n!}{(n-k)!}
 $$
+
 - Problem: in the above, we counted different orders of picking the same 3 cups as different picks. We correct for this by dividing by the number of ways to order the 3 cups we picked; i.e., $3!$; this gives us: 
+
 $$
 \frac{\frac{8!}{5!}}{3!} = \frac{8!}{3! (8-3)!} \quad \text{which generalizes to} \quad \frac{n!}{k! (n-k)!}
 $$
