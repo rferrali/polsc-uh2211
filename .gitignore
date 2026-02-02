@@ -1,6 +1,7 @@
 # Quarto output
 *.pdf
 *.html
+*_files
 
 # History files
 .Rhistory
