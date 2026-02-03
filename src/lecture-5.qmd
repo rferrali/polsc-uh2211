@@ -1,0 +1,298 @@
+---
+title: "Lecture 5: hypothesis testing"
+author: "Romain Ferrali"
+format: 
+    html: 
+        embed-resources: true
+---
+
+```{r}
+#| label: setup
+#| echo: false
+
+library(tibble)
+library(ggplot2)
+```
+
+In lecture 3, we saw that the average number of goals per game dropped over time, from 3.61 goals per game in the 1890s to 2.63 goals per game in the 2010s. But we weren't sure whether this difference was picking up a real difference, or just noise/luck. Last time, we saw that statistics provides us with a toolkit to answer those questions. The key concepts are: 
+
+- **Test** a **hypothesis**: $3.61 > 2.63$
+- To do so, you compare your data to a **null hypothesis**, where you assume that the observed difference is all due to luck. Our null hypothesis: $3.61 \approx 2.63$. 
+- We do that because assuming that what we see in the data is all due to luck allows us to leverage probability theory to get a sense of how "lucky" our data is $\Rightarrow$ very unlikely data means that our null hypothesis is probably false $\Rightarrow$ there is probably a real difference between the two periods.
+- The idea of "lucky" is captured by the **p-value**: the probability of getting results at least as extreme as the observed results, assuming that the null hypothesis is true. A low p-value means that our data is very unlikely under the null hypothesis, which means that we can reject the null hypothesis and conclude that there is a real difference between the two periods. 
+- There are two kinds of p-values: **one-sided** (extremely good only / extremely bad only) and **two-sided** (extremely good *and* extremely bad).
+
+Last time, we did this using a very peculiar setting, which boiled down to being successful in a number of trials. Today, we'll introduce a framework that allows to test hypotheses in any kind of setting. We'll start with a simple example: students taking tests. 
+
+# Our example
+
+A student got an average grade of 48. The passing grade is 50. Should I fail this student or round up and let them pass? i.e., is his "true" level really below 50, or is this just bad luck? 
+
+- Our null hypothesis: $48 \approx 50$
+- Whether we should fail the test depends on
+  - How many tests the student took: 
+    - more tests = more confidence that the average is representative of the true level
+    - i.e., **sample size**
+  - The grade itself: 
+    - lower the grade = more confident that the true level is below 50
+    - i.e., **effect size**
+  - The variability of the grades: 
+    - i.e., is this student a very "regular" student (e.g., he got 47 and 49), or is he a very "irregular" student (e.g., he got 79 and 17)
+    - more variability = less confidence that the average is representative of the true level
+    - i.e., **standard deviation**
+
+# Mathematical toolkit
+
+## The normal distribution
+
+Last time, we saw one distribution: the binomial distribution. This distribution is useful when we have a number of trials with two possible outcomes (success/failure). 
+
+Today, we'll see another distribution: the normal distribution (also called Gaussian distribution). This distribution is useful to model continuous variables that tend to cluster around a mean. Many natural phenomena follow a normal distribution, such as heights, weights, and test scores.
+
+The normal distribution is characterized by two parameters: the mean ($\mu$) and the standard deviation ($\sigma$). The mean determines the center of the distribution, while the standard deviation determines the spread of the distribution. We write it as 
+
+$$
+N(\mu, \sigma^2),
+$$
+
+where $\sigma^2$ is the variance (the square of the standard deviation).
+
+It turns out that heights of adult humans follow a normal distribution. For instance, women's heights are normally distributed with a mean of 162 cm and a standard deviation of 6.1 cm. So: 
+
+$$
+\text{female heights} \sim N(162, 6.1^2).
+$$
+
+Let's simulate this in R and visualize it.
+
+```{r}
+#| label: normal distribution, heights
+
+# female height is distributed normally,
+# with a mean of 162cm and a standard deviation of 6.1cm
+
+heights <- rnorm(n = 1000, mean = 162, sd = 6.1)
+ggplot(tibble(height = heights), aes(x = height)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "lightblue") +
+  labs(title = "Distribution of female heights", x = "Height (cm)", y = "Count")
+```
+
+## The law of large numbers - or why taking more tests is more informative of a student's level
+
+> **Theorem. The law of large numbers.** As the sample size increases, the sample mean converges to the population mean. In other words, the more data you have, the closer your sample mean is to the true mean of the population. Formally, if $\overline{X}_n$ is the sample mean of a sample of size $n$ drawn from a population with mean $\mu$, then
+$$
+\mathbb{E}[X_n] \xrightarrow{p} \mu \text{ as } n \rightarrow \infty.
+$$
+ 
+This is why, as our student takes more tests, we are more confident that his average grade ($\overline{X}_n$) is representative of his true level ($\mu$).
+
+## The central limit theorem - or how much taking more tests helps
+
+> **Central limit theorem.** The distribution of the sample mean approaches a normal distribution as the sample size increases, regardless of the shape of the population distribution. This means that even if the underlying data is not normally distributed, the average of a large enough sample will be normally distributed. Specifically, if $\overline{X}_n$ is the sample mean of a sample of size $n$ drawn from a population with mean $\mu$ and standard deviation $\sigma$, then 
+$$
+\overline{X}_n \xrightarrow{d} N \left(\mu, \frac{\sigma^2}{n}\right) \text{ as } n \rightarrow \infty.
+$$
+ 
+This result is very powerful, because it tells us not only that the more tests our student takes, the more his average grade is representative of his true level, but also **how much more informative each additional test is**. This theorem proves two of our intuitions above: 
+
+- Tests are more informative as you take more of them: the variance of $\overline{X}_n$ is decreasing in $n$
+- Tests are less informative when the student is more irregular: the variance of $\overline{X}_n$ is increasing in $\sigma^2$
+
+# Let's put this into practice
+
+## What GPAs could we have observed?
+
+Our null hypothesis is that the student's true level is 50. We observed an average grade of 48 after he took two. We want to know how likely it is to observe such a low average grade if the student's true level is indeed 50. We have
+- $\overline{X}_n = 48$
+- $n = 2$
+- $\mu = 50$ (under the null hypothesis)
+- And $\sigma$? We don't know the student's standard deviation, but we can estimate it using the sample standard deviation. Let's say that the student's grades were 49 and 47. 
+
+```{r}
+#| label: central-limit-theorem-example
+
+grades <- c(49, 47)
+n <- length(grades)
+x_bar <- mean(grades)
+s <- sd(grades)
+mu <- 50 # null hypothesis
+
+# let's take a look at the possible average grades we could have observed
+# r-function to draw from a distribution
+# recall: we used rbinom last time to draw from a binomial distribution
+grades <- rnorm(1e3, mean = mu, sd = s / sqrt(n))
+
+ggplot(tibble(grade = grades), aes(grade)) +
+  geom_histogram(binwidth = 0.5, color = "black", fill = "lightblue") +
+  geom_vline(xintercept = x_bar, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = mu, color = "red", linetype = "solid") +
+  labs(
+    title = "Distribution of average grades under the null hypothesis",
+    x = "Average grade",
+    y = "Count"
+  ) +
+  xlim(40, 60)
+```
+
+## The return of the p-value: how unlikely is our observed average grade if the student actually had a passing level?
+
+We can calculate the p-value using the standard normal distribution. We are interested in how likely it is to observe an average grade of 48 or lower if the student's true level is 50. This is a one-sided p-value.
+
+```{r}
+#| label: p-value-calculation
+
+# p-function: give it a value, it gives you
+# the area under the curve to the left of that value
+# (the cumulative probability: F(x) = Pr(X <= x))
+pnorm(q = x_bar, mean = mu, sd = s / sqrt(n))
+```
+
+# Looking at things differently: confidence intervals
+
+Another way to look at hypothesis testing is through confidence intervals. **A confidence interval gives us a range of values within which we expect the true parameter (here, the student's true level) to lie with a certain level of confidence (typically, 95%).**
+
+We will look at the Central Limit Theorem result in a different way. This time, we will assume that the student's true level is equal to its observed average grade ($\overline{X}_n$), and we will use the Central Limit Theorem to get a sense of what other average grades we could have observed given that he's taken 2 tests.
+
+```{r}
+#| label: towards-confidence-intervals
+
+grades <- rnorm(1e3, mean = x_bar, sd = s / sqrt(n))
+
+ggplot(tibble(grade = grades), aes(grade)) +
+  geom_histogram(binwidth = 0.5, color = "black", fill = "lightblue") +
+  geom_vline(xintercept = x_bar, color = "red", linetype = "solid") +
+  labs(
+    title = "Distribution of average grades if true level = observed average grade",
+    x = "Average grade",
+    y = "Count"
+  ) +
+  xlim(40, 60)
+```
+
+We want the range of average grades that cover 95% of the distribution above. Notice that this leaves out 2.5% of the distribution on each side. This gives us a 95% confidence interval for the student's true level. We want:
+
+1. The grade such that we leave 2.5% of the distribution on the left (our **lower bound**).
+2. The grade such that we leave 2.5% of the distribution on the right (our **upper bound**). Leaving 2.5% on the right is the same as keeping 97.5% on the left.
+
+We can calculate this using the `qnorm()` function.
+
+```{r}
+#| label: confidence-interval-calculation
+
+# q-function: give me the value that generates a cumulative probability of p
+lower_bound <- qnorm(p = 0.025, mean = x_bar, sd = s / sqrt(n))
+upper_bound <- qnorm(p = 0.975, mean = x_bar, sd = s / sqrt(n))
+c(
+  lower_bound,
+  upper_bound
+)
+```
+
+**Confidence intervals are another (simpler) way to look at hypothesis testing.** With 2 grades (47, 49), our 95% confidence interval is approximately (46.04, 49.96). We are 95% certain that the student's true level is below 50. Therefore, we should fail the student.
+
+**The "paradox" of confidence.** Less confidence = tighter bounds. Example: 
+
+- I am 100% certain that the student's true level is between 0 and 100. 
+- I am 95% certain that the student's true level is between 46.04 and 49.96.
+
+**The more precise your claim, the more risk you're taking, so the less confident you can be.** So, the 99% confidence interval would be wider than the 95% confidence interval.
+
+## Let's standardize things! 
+
+Mathematicians love standardization because it makes things easier to work with. We can think of any normal distribution as a shifted and rescaled version of the **standard normal distribution**, which has a mean of 0 and a standard deviation of 1 ($N(0,1)$). With some abuse of notation, we can write:
+$$
+N(\mu, \sigma^2) \equiv \underbrace{\mu}_{\text{shift}} + \underbrace{\sigma}_{\text{scale}} \cdot N(0, 1)
+$$
+
+```{r}
+#| label: application-standard-normal
+
+# this
+heights <- rnorm(n = 1000, mean = 162, sd = 6.1)
+# is the same as this
+heights <- 162 + 6.1 * rnorm(n = 1000, mean = 0, sd = 1)
+```
+
+So, we can rewrite the Central Limit Theorem in terms of the standard normal distribution.
+$$
+\overline{X}_n \xrightarrow{d} N \left(\mu, \frac{\sigma^2}{n}\right) \text{ as } n \rightarrow \infty
+\iff 
+\underbrace{\frac{\overline{X}_n - \mu}{\sigma / \sqrt{n}}}_{\text{z-score}} \xrightarrow{d} \underbrace{N(0, 1)}_{\text{std. normal}} \text{ as } n \rightarrow \infty
+$$
+
+> **Definition.** We call the **z-score** a **test statistic**. Under the test of our null hypothesis (no effect; i.e., $\overline{X}_n - \mu = 0$), our test statistic $z$ has a well-known distribution (the standard normal). We can then use that distribution to evaluate our test; i.e., get p-values and confidence intervals. The z-score decomposes into two parts:
+
+- The numerator: $\overline{X}_n - \mu$ is the **effect size**
+- The denominator: $\sigma / \sqrt{n}$ is the **standard error** ($\neq$ standard deviation), which captures how informative our data is (more tests ($n$) = lower standard error; more irregular student ($\sigma$) = higher standard error)
+
+```{r}
+#| label: z-score-calculation
+
+std_error <- s / sqrt(n)
+z_score <- (x_bar - mu) / std_error
+z_score
+# p-value from z-score
+pnorm(q = z_score, mean = 0, sd = 1)
+# confidence interval from z-score
+lower_bound_z <- x_bar + std_error * qnorm(p = 0.025, mean = 0, sd = 1)
+upper_bound_z <- x_bar + std_error * qnorm(p = 0.975, mean = 0, sd = 1)
+c(
+  lower_bound_z,
+  upper_bound_z
+)
+```
+
+# Let's get a bit more fancy: two students
+
+Let's add another student. This student got an average grade of 52 after taking 2 tests (51, 53). Is she better than him? 
+
+## Approach 1: recycling: overlapping confidence intervals
+
+We can just calculate the 95% confidence interval for both students and see if they overlap. If they don't overlap, we can conclude that there is a significant difference between the two students.
+
+### How can you recycle? Use functions!
+
+Functions are great when there is a piece of code that you want to reuse multiple times. Here, we can create a function that calculates the confidence interval for a given set of grades.
+
+```{r}
+#| label: basic-functions
+```
+
+```{r}
+#| label: ci-function
+```
+
+## Approach 2: the t-test
+
+The t-test is a statistical test that allows us to compare the means of two groups (here, groups of grades). 
+
+- Hypothesis: $52 > 48 \iff 52 - 48 > 0 \iff 2 > 0$
+- Null hypothesis: $52 \approx 48 \iff 2 \approx 0$
+
+We know that the mean grade of student 1 is normally distributed (Central Limit Theorem). We know also know that the mean grade of student 2 is normally distributed (Central Limit Theorem, again). The specific parameters of each student's distribution depends on (1) number of tests taken, (2) regularity of the student. We can most certainly combine these results to get the distribution of the difference between the two students' mean grades **under the null hypothesis that they actually have the same level**.
+
+It turns out that you can. The difference in means, when you don't know the true $\sigma$'s and estimate them from the data instead, has a test statistic, usually noted $t$. 
+
+- The $t$ statistic looks a lot like the z-score
+- The $t$ statistic follows a $t$-distribution. The $t$-distribution is similar to the normal distribution but has heavier tails to account for errors we make when estimating the $\sigma$'s. 
+
+> **The t-test uses the $t$ statistic to test the null hypothesis that the two means are equal.**
+
+```{r}
+tt <- t.test(
+  rnorm(10, -2, 1),
+  rnorm(10, 2, 1)
+)
+```
+
+# Important concepts
+
+- Hypothesis testing: testing a claim about a population using sample data.
+- Null hypothesis: the default assumption that there is no effect or difference.
+- P-value: the probability of observing data as extreme as the sample data, assuming the null hypothesis is true.
+- Confidence interval: a range of values within which we expect the true parameter to lie with a certain level of confidence.
+- The precision of a test (i.e., how likely you are to get significant effects, aka, small p-values) depends on effect size, sample size and sample variance (i.e., standard error).
+- Test statistic: a standardized value that is calculated from sample data during a hypothesis test. The test statistic is compared to a theoretical distribution (e.g., normal, t-distribution) to determine the p-value.
+- z-score: a test statistic used to test whether effect size = 0
+- standard error: a part of the z-score; captures how informative your data is, taking into account sample size (large sample = more informative) and sample variance (more variance = less informative)
+- t-statistic: a test statistic used to test whether the difference between two means = 0
