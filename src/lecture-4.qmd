@@ -1,7 +1,9 @@
 ---
 title: "Lecture 4: hypothesis testing - the lady tasting tea"
 author: "Romain Ferrali"
-format: html
+format: 
+    html: 
+        embed-resources: true
 ---
 
 ```{r}
@@ -37,8 +39,8 @@ Let's be concrete, and say that (1) is a milk first cup, and (0) is a tea first 
 # create the raw data: truth vs. lady's guesses
 
 df <- tibble(
-    truth = c(0,0,0,0,1,1,1,1),
-    guess = c(0,0,0,0,1,1,1,1)
+  truth = c(0, 0, 0, 0, 1, 1, 1, 1),
+  guess = c(0, 0, 0, 0, 1, 1, 1, 1)
 )
 
 # derive whether each guess was correct
@@ -92,28 +94,28 @@ sum(trials == 7) / length(trials)
 # make a plot of those probabilities
 
 pl <- tibble(
-    n_success = 0:8, 
-    pr_sim = c(
-        sum(trials == 0) / length(trials), 
-        sum(trials == 1) / length(trials),
-        sum(trials == 2) / length(trials),
-        sum(trials == 3) / length(trials),
-        sum(trials == 4) / length(trials),
-        sum(trials == 5) / length(trials),
-        sum(trials == 6) / length(trials),
-        sum(trials == 7) / length(trials),
-        sum(trials == 8) / length(trials)
-    )
+  n_success = 0:8,
+  pr_sim = c(
+    sum(trials == 0) / length(trials),
+    sum(trials == 1) / length(trials),
+    sum(trials == 2) / length(trials),
+    sum(trials == 3) / length(trials),
+    sum(trials == 4) / length(trials),
+    sum(trials == 5) / length(trials),
+    sum(trials == 6) / length(trials),
+    sum(trials == 7) / length(trials),
+    sum(trials == 8) / length(trials)
+  )
 )
 
 ggplot(pl, aes(x = n_success, y = pr_sim)) +
-    geom_col() +
-    scale_y_continuous(labels = scales::percent_format()) +
-    labs(
-        title = "Probability of getting k successes out of n trials",
-        x = "Number of successes (k)",
-        y = "Probability"
-    )
+  geom_col() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Probability of getting k successes out of n trials",
+    x = "Number of successes (k)",
+    y = "Probability"
+  )
 ```
 
 Actually, there is a shortcut: a formula gives us the exact result in this kind of situation. We like this because math is cheaper than simulations and is exact. The formula is:
