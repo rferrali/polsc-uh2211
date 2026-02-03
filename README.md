@@ -12,7 +12,7 @@ Lecture notes for course POLSC-UH2211
 
 - [Homework 1](/docs/homework/homework-1.md)
 
-## Setup
+## Getting started
 
 ### Before the first lecture (required)
 
@@ -29,21 +29,23 @@ Nothing else is required.**
     - This step links your GitHub account to your university email address.
     - If approval is pending, that is fine — you can still follow the first classes.
 
-✅ **That’s it. Please do not install anything yet.**
-
 ---
 
 ### In class: running R in your browser (we will do this together)
 
-During the first lecture, we will set up the working environment together using **GitHub Codespaces**.
+**‼️ Bring your laptop**
 
-You do **not** need to install any software on your computer. Everything will run directly in your browser.
+Click on the Code (green button) -> Codespaces tab -> Create codespace on main.
+    
+This will create your own **Codespace**; a virtual machine on the cloud with all the software we need for this course. You can follow along the lecture notes and modify what you want as you see fit. 
 
-Please bring a laptop and make sure you can log in to your GitHub account.
+**Don't hesitate to change things, you will always be able to discard your changes and go back where the lecture started.** 
+
+To go back to your Codespace, follow the same steps. Click on the Code (green button) -> Codespaces tab. You will now see a machine with a name; that's your own Codespace. Click on it to open it. If it's broken, click the ..., delete it, and create a new one 😉.
 
 ---
 
-### Optional later: running R on your own computer (advanced)
+### Running R on your own computer (advanced)
 
 This step is **not required at the beginning of the course**.
 
