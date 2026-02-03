@@ -1,10 +1,16 @@
 # POLSC-UH2211 - Data Analysis: Political Science 
 Lecture notes for course POLSC-UH2211
 
-## The lectures
+## Lectures
 
+- [Lecture 1](/lectures/lecture-1.R)
+- [Lecture 2](/lectures/lecture-2.R)
 - [Lecture 3](/lectures/lecture-3.R)
 - [Lecture 4](/docs/lectures/lecture-4.md)
+
+## Homework assignments
+
+- [Homework 1](/docs/homework/homework-1.md)
 
 ## Setup
 
