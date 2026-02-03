@@ -1,0 +1,88 @@
+# Problem set 1
+Romain Ferrali
+
+This is a problem set designed to make sure you’ve got the basics of R
+down. Feel free to
+
+1.  have a look at the .qmd file of this document to get another
+    example,
+2.  use the starter template at
+    <https://github.com/recap-org/template-r-small> for a clean starting
+    setup.
+
+You must complete this problem set entirely on your own. We want to see
+the code that you wrote to get there, so Be sure to that your code
+chunks are visible in your output (they should be by default). See this
+qmd file if you have no clue what we’re talking about.
+
+``` r
+# This chunk is visible, because it has not set echo.
+# (open the .qmd file to see what I'm talking about).
+# Because echo is not set, it takes the default value (true)
+# So the chunk is shown in the output.
+```
+
+## Problem 1: Build a fake dataset.
+
+Create a fake `data.frame` (or `tibble`) of at least 10 observations and
+5 columns, including the following:
+
+1.  One variable that is a `logical` (e.g., TRUE/FALSE).
+2.  One variable is a `character`.
+3.  One variable is `numeric`.
+4.  Each variable should have a reasonable name.
+5.  Each row should be unique.
+6.  Each column should have variation (e.g. a column can’t be all 1’s).
+7.  BONUS: One variable that is a date (hint: `as.Date()`)
+8.  BONUS: One variable that is a phone number (hint: find the
+    `charlatan` package)
+
+## Problem 2: Basic data manipulation and summary.
+
+Load the dataset called `tik_tok_data.csv`, located on the class site.
+
+1.  What is the mean number of views?
+
+2.  What is the variance of the number of views?
+
+3.  How many different users are in the data? How many videos from each
+    user are contained in the data? (Hint: `unique()`)
+
+4.  How many users have zero shares? What are the names of users with
+    zero-shares videos?
+
+5.  Report the average number of views for the user **timesaver9000**;
+    do the same for **lindsaynikole**. Who has a higher average number
+    of views?
+
+6.  Calculate the standard error for the mean of the number of views for
+    **timesaver9000** and **lindsaynikole**. Which has the lower
+    standard error? Describe why the standard error is lower in terms of
+    variance and sample size.
+
+7.  Using the “overlapping confidence intervals” approach, test the
+    hypothesis that **timesaver9000** and **lindsaynikole** have
+    different average numbers of views.
+
+8.  Using the `t.test()` function, test the same hypothesis above.
+    Interpret its output in detail.
+
+## Problem 3: Writing Functions
+
+1.  Write a function to convert pounds to kilograms.
+
+2.  Write a function to convert pounds to kilograms, or kilograms to
+    pounds.
+
+3.  Write a function to convert any of pounds, kilograms, stone, or gram
+    to any of the other units. Start by thinking about what arguments
+    your function should take. There should be 3.
+
+End of HW1. Make sure to submit both your .qmd file and output, either
+as a self-contained HTML or PDF file (this file, as well as the starter
+template at <https://github.com/recap-org/template-r-small> are set up
+to output self-contained HTML files). And if you need help, remember the
+rule: if you can’t figure out a coding issue after spending 30 minutes
+and Googling, EMAIL US.
+
+Good luck!

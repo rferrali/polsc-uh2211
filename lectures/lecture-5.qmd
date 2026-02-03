@@ -1,9 +1,5 @@
 ---
 title: "Lecture 5: hypothesis testing"
-author: "Romain Ferrali"
-format: 
-    html: 
-        embed-resources: true
 ---
 
 ```{r}
@@ -12,6 +8,7 @@ format:
 
 library(tibble)
 library(ggplot2)
+read.csv("./data/lecture-1-england.csv")
 ```
 
 In lecture 3, we saw that the average number of goals per game dropped over time, from 3.61 goals per game in the 1890s to 2.63 goals per game in the 2010s. But we weren't sure whether this difference was picking up a real difference, or just noise/luck. Last time, we saw that statistics provides us with a toolkit to answer those questions. The key concepts are: 
