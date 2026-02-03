@@ -4,7 +4,7 @@ Lecture notes for course POLSC-UH2211
 ## The lectures
 
 - [Lecture 3](/lectures/lecture-3.R)
-- [Lecture 4](/docs/lecture-4.md)
+- [Lecture 4](/docs/lectures/lecture-4.md)
 
 ## Setup
 
