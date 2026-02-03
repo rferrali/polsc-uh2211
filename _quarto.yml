@@ -1,0 +1,5 @@
+format: gfm
+author: "Romain Ferrali"
+project:
+  execute-dir: project
+  output-dir: docs

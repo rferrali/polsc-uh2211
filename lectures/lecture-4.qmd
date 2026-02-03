@@ -1,9 +1,5 @@
 ---
 title: "Lecture 4: hypothesis testing - the lady tasting tea"
-author: "Romain Ferrali"
-format: 
-    html: 
-        embed-resources: true
 ---
 
 ```{r}

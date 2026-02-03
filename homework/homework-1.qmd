@@ -1,9 +1,5 @@
 ---
 title: "Problem set 1"
-author: "Romain Ferrali"
-format: 
-    html:
-        embed-resources: true
 ---
 
 This is a problem set designed to make sure you've got the basics of R down. Feel free to

@@ -1,7 +1,6 @@
 # Quarto output
 *.pdf
 *.html
-*_files
 
 # History files
 .Rhistory
@@ -45,10 +44,13 @@ vignettes/*.pdf
 .Renviron
 
 # pkgdown site
-docs/
+# docs/
 
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+/.quarto/
+**/*.quarto_ipynb

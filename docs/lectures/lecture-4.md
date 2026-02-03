@@ -1,0 +1,267 @@
+# Lecture 4: hypothesis testing - the lady tasting tea
+Romain Ferrali
+
+Last time we concluded that soccer got less exciting over time:
+
+- 1890s: on average, 3.61 goals per game
+- 2010s: on average, 2.63 goals per game
+
+Does this pick up something real? After all, one additional goal in a
+game is not that uncommon. Maybe this is just luck. In this lecture and
+the next, we will learn how adjudicate this issue. Formally, we are
+**testing** the following **hypothesis**:
+
+> “An average of 3.61 goals per game in the 1890s is higher than an
+> average of 2.63 goals per game in the 2010s.”
+
+Before we get back to soccer, let’s take a detour to a famous example in
+the history of statistics: the lady tasting tea, by Ronald A. Fisher
+
+# The lady tasting tea
+
+The woman in question, phycologist Muriel Bristol, claimed to be able to
+tell whether the tea or the milk was added first to a cup. Her future
+husband, William Roach, suggested that Fisher give her eight cups, four
+of each variety, in random order. One could then ask what the
+probability was for her getting the specific number of cups she
+identified correct (in fact all eight), but just by chance.
+
+# What is the probability of getting all eight cups correct by chance?
+
+Let’s be concrete, and say that (1) is a milk first cup, and (0) is a
+tea first cup. Data could look like this:
+
+``` r
+# create the raw data: truth vs. lady's guesses
+
+df <- tibble(
+  truth = c(0, 0, 0, 0, 1, 1, 1, 1),
+  guess = c(0, 0, 0, 0, 1, 1, 1, 1)
+)
+
+# derive whether each guess was correct
+
+df$correct <- df$truth == df$guess
+
+# get the number of correct guesses
+
+sum(df$correct)
+```
+
+    [1] 8
+
+The real question is: how many ways are there to pick four cups out of
+eight? This is given by the binomial coefficient:
+
+$$
+\binom{8}{4} = \frac{8!}{4! (8-4)!} = \frac{8 \times 7 \times 6 \times 5}{4 \times 3 \times 2 \times 1} = 70
+$$
+
+So the probability of getting all eight cups correct by chance is
+$\frac{1}{70} = 0.014$.
+
+If she’d picked at random, she would have had a 1.4% chance of getting
+all eight cups correct. This is pretty unlikely, so we can conclude that
+she probably really could tell the difference between the two types of
+cups. In other words:
+
+1.  It is unlikely that she got all eight cups correct by chance
+2.  Therefore, she probably really could tell the difference between the
+    two types of cups.
+
+> **Definition.** The **null hypothesis** is the default assumption that
+> there is no effect or no difference.
+
+Here, the null hypothesis is that the lady cannot tell the difference
+between the two types of cups, and is just guessing. The null hypothesis
+is unlikely given the data, so we reject it.
+
+# How do we generalize this?
+
+Here, the lady got all eight cups correct. Imagine she had gotten 7 cups
+correct instead. Considering 8 success simplified two things:
+
+## The binomial distribution
+
+1.  It was (relatively) easy to compute the probability of getting all
+    eight correct by chance: $\frac{1}{70}$. At least, the numerator was
+    easy. **How do we compute the probability of getting 7 correct by
+    chance?**
+
+First, let’s reframe our question: what is the probability of getting
+exactly $k = 7$ cups correct out of $n = 8$ cups, when guessing
+randomly? Guessing randomly means that for each cup, there is a
+$p = 0.5$ probability of getting it correct. In other words, what is the
+probability of getting $k$ success out of $n$ trials with a probability
+$p$ of success on each trial? We call this the **binomial
+distribution**. We say that random variable $X$ (our number of success)
+**follows** a binomial distribution. We write
+$X \sim \text{Binom(n, k)}$.
+
+Again, what is the probability of getting 7 successes out of 8 trials?
+We can brute-force this. Let’s try:
+
+``` r
+# simulate number of successes when guessing randomly, 1000 times
+
+trials <- rbinom(1e4, 8, .5)
+
+# derive probability of getting exactly 7 correct
+
+sum(trials == 7) / length(trials)
+```
+
+    [1] 0.0327
+
+``` r
+# make a plot of those probabilities
+
+pl <- tibble(
+  n_success = 0:8,
+  pr_sim = c(
+    sum(trials == 0) / length(trials),
+    sum(trials == 1) / length(trials),
+    sum(trials == 2) / length(trials),
+    sum(trials == 3) / length(trials),
+    sum(trials == 4) / length(trials),
+    sum(trials == 5) / length(trials),
+    sum(trials == 6) / length(trials),
+    sum(trials == 7) / length(trials),
+    sum(trials == 8) / length(trials)
+  )
+)
+
+ggplot(pl, aes(x = n_success, y = pr_sim)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Probability of getting k successes out of n trials",
+    x = "Number of successes (k)",
+    y = "Probability"
+  )
+```
+
+![](lecture-4_files/figure-commonmark/lady-7-correct-1.png)
+
+Actually, there is a shortcut: a formula gives us the exact result in
+this kind of situation. We like this because math is cheaper than
+simulations and is exact. The formula is: $$
+\Pr(X = k) = \underbrace{\binom{n}{k}}_{\text{Correction for number of permutations}} \underbrace{p^k}_{\text{Pr. of getting the $k$ correct}} \underbrace{(1-p)^{n-k}}_{\text{Pr. of getting the $n-k$ wrong}}
+$$
+
+``` r
+# probability of getting exactly 7 correct using the formula
+
+dbinom(x = 7, size = 8, prob = 0.5)
+```
+
+    [1] 0.03125
+
+``` r
+pl$pr_real <- dbinom(x = pl$n_success, size = 8, prob = 0.5)
+
+# let's look at the data to compare the simulation and the real probabilities
+
+pl
+```
+
+    # A tibble: 9 × 3
+      n_success pr_sim pr_real
+          <int>  <dbl>   <dbl>
+    1         0 0.0041 0.00391
+    2         1 0.0331 0.0313 
+    3         2 0.104  0.109  
+    4         3 0.217  0.219  
+    5         4 0.272  0.273  
+    6         5 0.218  0.219  
+    7         6 0.115  0.109  
+    8         7 0.0327 0.0313 
+    9         8 0.0034 0.00391
+
+# The p-value
+
+2.  Interpreting the result was easy. How do we interpret the result if
+    she got 7 correct instead of 8? In a world where she got 7 cups
+    correct, how do we handle the fact that she could have done better
+    and gotten all 8 correct?
+
+Here, we can use the idea of a **p-value**.
+
+> **Definition.** The p-value is the probability of getting results at
+> least as extreme as the observed results, assuming that the null
+> hypothesis is true.
+
+Here, “at least as extreme” means getting 7 or more cups correct.
+
+``` r
+# probability of getting at least 7 correct
+
+# it's Pr(7 correct) + Pr(8 correct)
+
+pl$pr_real[pl$n_success == 7] + pl$pr_real[pl$n_success == 8]
+```
+
+    [1] 0.03515625
+
+``` r
+# or, more compactly:
+
+sum(pl$pr_real[pl$n_success >= 7])
+```
+
+    [1] 0.03515625
+
+A low p-value indicates that the observed results are very atypical
+given the null hypothesis. Indeed, if you have a low p-value, it means
+that it’s very hard to get something more extreme than you which, in
+turn, means that you’re extreme yourself.
+
+How can we define extreme? Say our lady got no cup correct. By our
+notion of p-value, her p-value would be the probability of getting 0 or
+more cups correct, which is 1. This is not extreme at all, so we would
+not reject the null hypothesis.
+
+- Our current notion of p-value only encodes the idea of being extremely
+  good. In the case of 0 success, our lady is extremely bad, but our
+  p-value does not capture this.
+- Extremely good only / extremely bad only is called a **one-sided
+  p-value**.
+- Extremely good **and** extremely bad is called a **two-sided
+  p-value**. In our 7 successes example, the two-sided p-value would be
+  the probability of getting 0, 1, 7, or 8 cups correct.
+
+``` r
+# probability of getting 0, 1, 7, or 8 correct
+
+sum(pl$pr_real[pl$n_success %in% c(0, 1, 7, 8)])
+```
+
+    [1] 0.0703125
+
+## Appendix: the binomial coefficient
+
+Why? Let’s do this step by step. For the sake of the argument, let’s say
+we want to pick $k = 3$ cups out of $n = 8$ cups instead of 4 out of 8.
+
+- How many ways are there to pick all of our 8 cups?
+
+  - $8!$: you can pick any of the 8 cups first ($8$), then any of the
+    remaining 7 cups second ($8 \times 7$), etc. **Remark that each of
+    these picks has a different order.** More generally, there are $n!$
+    ways to order $n$ items.
+
+- We only care about picking 3 cups out of 8, which we can think of as
+  the above process stopping after 3 picks. So, there are
+  $8 \times 7 \times 6$ ways of picking 3 cups. We can rewrite this
+  cleverly to reuse notation we already have: $$
+  8 \times 7 \times 6 = \frac{8!}{5!} \quad \text{which generalizes to} \quad \frac{n!}{(n-k)!}
+  $$
+
+- Problem: in the above, we counted different orders of picking the same
+  3 cups as different picks. We correct for this by dividing by the
+  number of ways to order the 3 cups we picked; i.e., $3!$; this gives
+  us:
+
+$$
+\frac{\frac{8!}{5!}}{3!} = \frac{8!}{3! (8-3)!} \quad \text{which generalizes to} \quad \frac{n!}{k! (n-k)!}
+$$

@@ -1,6 +1,11 @@
 # POLSC-UH2211 - Data Analysis: Political Science 
 Lecture notes for course POLSC-UH2211
 
+## The lectures
+
+- [Lecture 3](/lectures/lecture-3.R)
+- [Lecture 4](/docs/lecture-4.md)
+
 ## Setup
 
 ### Before the first lecture (required)
