@@ -8,7 +8,6 @@ title: "Lecture 5: hypothesis testing"
 
 library(tibble)
 library(ggplot2)
-read.csv("./data/lecture-1-england.csv")
 ```
 
 In lecture 3, we saw that the average number of goals per game dropped over time, from 3.61 goals per game in the 1890s to 2.63 goals per game in the 2010s. But we weren't sure whether this difference was picking up a real difference, or just noise/luck. Last time, we saw that statistics provides us with a toolkit to answer those questions. The key concepts are: 
@@ -68,17 +67,19 @@ Let's simulate this in R and visualize it.
 # female height is distributed normally,
 # with a mean of 162cm and a standard deviation of 6.1cm
 
-heights <- rnorm(n = 1000, mean = 162, sd = 6.1)
+heights <- rnorm(n = 1e3, mean = 162, sd = 6.1)
 ggplot(tibble(height = heights), aes(x = height)) +
   geom_histogram(binwidth = 1, color = "black", fill = "lightblue") +
+  geom_vline(xintercept = 162, color = "red", linetype = "solid") +
   labs(title = "Distribution of female heights", x = "Height (cm)", y = "Count")
 ```
 
 ## The law of large numbers - or why taking more tests is more informative of a student's level
 
 > **Theorem. The law of large numbers.** As the sample size increases, the sample mean converges to the population mean. In other words, the more data you have, the closer your sample mean is to the true mean of the population. Formally, if $\overline{X}_n$ is the sample mean of a sample of size $n$ drawn from a population with mean $\mu$, then
+
 $$
-\mathbb{E}[X_n] \xrightarrow{p} \mu \text{ as } n \rightarrow \infty.
+\mathbb{E}[\overline{X}_n] \xrightarrow{p} \mu \text{ as } n \rightarrow \infty.
 $$
  
 This is why, as our student takes more tests, we are more confident that his average grade ($\overline{X}_n$) is representative of his true level ($\mu$).
@@ -86,6 +87,7 @@ This is why, as our student takes more tests, we are more confident that his ave
 ## The central limit theorem - or how much taking more tests helps
 
 > **Central limit theorem.** The distribution of the sample mean approaches a normal distribution as the sample size increases, regardless of the shape of the population distribution. This means that even if the underlying data is not normally distributed, the average of a large enough sample will be normally distributed. Specifically, if $\overline{X}_n$ is the sample mean of a sample of size $n$ drawn from a population with mean $\mu$ and standard deviation $\sigma$, then 
+
 $$
 \overline{X}_n \xrightarrow{d} N \left(\mu, \frac{\sigma^2}{n}\right) \text{ as } n \rightarrow \infty.
 $$
@@ -148,7 +150,7 @@ pnorm(q = x_bar, mean = mu, sd = s / sqrt(n))
 
 Another way to look at hypothesis testing is through confidence intervals. **A confidence interval gives us a range of values within which we expect the true parameter (here, the student's true level) to lie with a certain level of confidence (typically, 95%).**
 
-We will look at the Central Limit Theorem result in a different way. This time, we will assume that the student's true level is equal to its observed average grade ($\overline{X}_n$), and we will use the Central Limit Theorem to get a sense of what other average grades we could have observed given that he's taken 2 tests.
+We will look at the Central Limit Theorem result in a different way. This time, we will assume that the student's true level is equal to its observed average grade. That is, we will use the Central limit theorem with $\mu = 48$ instead of $\mu = 50$. The Central Limit Theorem will then tell us what other average grades we could have observed given that he's taken 2 tests.
 
 ```{r}
 #| label: towards-confidence-intervals
@@ -166,7 +168,7 @@ ggplot(tibble(grade = grades), aes(grade)) +
   xlim(40, 60)
 ```
 
-We want the range of average grades that cover 95% of the distribution above. Notice that this leaves out 2.5% of the distribution on each side. This gives us a 95% confidence interval for the student's true level. We want:
+Technically, we haven't done much: we've just shifted the distribution to be centered around 48 instead of 50. But this allows us to answer a different question: **what range of average grades would we expect to see most of the time if the student's true level is indeed 48?** By "most of the time", we typically mean 95% of the time. Answering the question requires getting the range of average grades that cover 95% of the distribution above. Notice that this leaves out 2.5% of the distribution on each side. This gives us a 95% confidence interval for the student's true level. We want:
 
 1. The grade such that we leave 2.5% of the distribution on the left (our **lower bound**).
 2. The grade such that we leave 2.5% of the distribution on the right (our **upper bound**). Leaving 2.5% on the right is the same as keeping 97.5% on the left.
@@ -197,6 +199,7 @@ c(
 ## Let's standardize things! 
 
 Mathematicians love standardization because it makes things easier to work with. We can think of any normal distribution as a shifted and rescaled version of the **standard normal distribution**, which has a mean of 0 and a standard deviation of 1 ($N(0,1)$). With some abuse of notation, we can write:
+
 $$
 N(\mu, \sigma^2) \equiv \underbrace{\mu}_{\text{shift}} + \underbrace{\sigma}_{\text{scale}} \cdot N(0, 1)
 $$
@@ -211,6 +214,7 @@ heights <- 162 + 6.1 * rnorm(n = 1000, mean = 0, sd = 1)
 ```
 
 So, we can rewrite the Central Limit Theorem in terms of the standard normal distribution.
+
 $$
 \overline{X}_n \xrightarrow{d} N \left(\mu, \frac{\sigma^2}{n}\right) \text{ as } n \rightarrow \infty
 \iff 
@@ -276,10 +280,7 @@ It turns out that you can. The difference in means, when you don't know the true
 > **The t-test uses the $t$ statistic to test the null hypothesis that the two means are equal.**
 
 ```{r}
-tt <- t.test(
-  rnorm(10, -2, 1),
-  rnorm(10, 2, 1)
-)
+#| label: t-test-application
 ```
 
 # Important concepts
