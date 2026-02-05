@@ -60,23 +60,17 @@ Load the dataset called `tik_tok_data.csv`, located on the class site.
     standard error? Describe why the standard error is lower in terms of
     variance and sample size.
 
-7.  Using the “overlapping confidence intervals” approach, test the
-    hypothesis that **timesaver9000** and **lindsaynikole** have
-    different average numbers of views.
+<!-- 7. Using the "overlapping confidence intervals" approach, test the hypothesis that **timesaver9000** and **lindsaynikole** have different average numbers of views. -->
 
-8.  Using the `t.test()` function, test the same hypothesis above.
-    Interpret its output in detail.
+<!-- 8. Using the `t.test()` function, test the same hypothesis above. Interpret its output in detail. -->
 
-## Problem 3: Writing Functions
+<!-- ## Problem 3: Writing Functions -->
 
-1.  Write a function to convert pounds to kilograms.
+<!-- 1. Write a function to convert pounds to kilograms. -->
 
-2.  Write a function to convert pounds to kilograms, or kilograms to
-    pounds.
+<!-- 2. Write a function to convert pounds to kilograms, or kilograms to pounds. -->
 
-3.  Write a function to convert any of pounds, kilograms, stone, or gram
-    to any of the other units. Start by thinking about what arguments
-    your function should take. There should be 3.
+<!-- 3. Write a function to convert any of pounds, kilograms, stone, or gram to any of the other units. Start by thinking about what arguments your function should take. There should be 3. -->
 
 End of HW1. Make sure to submit both your .qmd file and output, either
 as a self-contained HTML or PDF file (this file, as well as the starter

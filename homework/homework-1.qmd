@@ -51,26 +51,21 @@ Load the dataset called `tik_tok_data.csv`, located on the class site.
 
 4. How many users have zero shares? What are the names of users with zero-shares videos?
 
-5. Report the average number of views for the user **timesaver9000**; do the same
-for **lindsaynikole**. Who has a higher average number of views?
+5. Report the average number of views for the user **timesaver9000**; do the same for **lindsaynikole**. Who has a higher average number of views?
 
-6. Calculate the standard error for the mean of the number of views for **timesaver9000** and **lindsaynikole**.
-Which has the lower standard error? Describe why the standard error is lower in terms of variance and
-sample size.
+6. Calculate the standard error for the mean of the number of views for **timesaver9000** and **lindsaynikole**. Which has the lower standard error? Describe why the standard error is lower in terms of variance and sample size.
 
-7. Using the "overlapping confidence intervals" approach, test the hypothesis that **timesaver9000** and **lindsaynikole** have different average numbers of views.
+<!-- 7. Using the "overlapping confidence intervals" approach, test the hypothesis that **timesaver9000** and **lindsaynikole** have different average numbers of views. -->
 
-8. Using the `t.test()` function, test the same hypothesis above. Interpret its output in detail.
+<!-- 8. Using the `t.test()` function, test the same hypothesis above. Interpret its output in detail. -->
 
+<!-- ## Problem 3: Writing Functions -->
 
+<!-- 1. Write a function to convert pounds to kilograms. -->
 
-## Problem 3: Writing Functions
+<!-- 2. Write a function to convert pounds to kilograms, or kilograms to pounds. -->
 
-1. Write a function to convert pounds to kilograms.
-
-2. Write a function to convert pounds to kilograms, or kilograms to pounds.
-
-3. Write a function to convert any of pounds, kilograms, stone, or gram to any of the other units. Start by thinking about what arguments your function should take. There should be 3.
+<!-- 3. Write a function to convert any of pounds, kilograms, stone, or gram to any of the other units. Start by thinking about what arguments your function should take. There should be 3. -->
 
 
 
