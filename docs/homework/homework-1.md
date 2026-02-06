@@ -39,7 +39,7 @@ Create a fake `data.frame` (or `tibble`) of at least 10 observations and
 
 ## Problem 2: Basic data manipulation and summary.
 
-Load the dataset [tik_tok_data.csv](../data/homework-1-tiktok.csv),
+Load the dataset [tik_tok_data.csv](../../data/homework-1-tiktok.csv),
 located on the class site.
 
 1.  What is the mean number of views?
@@ -63,8 +63,9 @@ located on the class site.
 
 ## Problem 3: Did soccer really get less exciting over time? (BONUS)
 
-Load the dataset [lecture-1-england.csv](../data/lecture-1-england.csv),
-located on the class site
+Load the dataset
+[lecture-1-england.csv](../../data/lecture-1-england.csv), located on
+the class site
 
 1.  Report the average number of goals for the 1890’s and 2010’s
     decades. Which decade had more goals on average?
