@@ -39,7 +39,8 @@ Create a fake `data.frame` (or `tibble`) of at least 10 observations and
 
 ## Problem 2: Basic data manipulation and summary.
 
-Load the dataset called `tik_tok_data.csv`, located on the class site.
+Load the dataset [tik_tok_data.csv](../data/homework-1-tiktok.csv),
+located on the class site.
 
 1.  What is the mean number of views?
 
@@ -60,6 +61,17 @@ Load the dataset called `tik_tok_data.csv`, located on the class site.
     standard error? Describe why the standard error is lower in terms of
     variance and sample size.
 
+## Problem 3: Did soccer really get less exciting over time? (BONUS)
+
+Load the dataset [lecture-1-england.csv](../data/lecture-1-england.csv),
+located on the class site
+
+1.  Report the average number of goals for the 1890’s and 2010’s
+    decades. Which decade had more goals on average?
+2.  Calculate the confidence interval for the mean number of goals in
+    the 1890’s and 2010’s decades.
+3.  Do these confidence intervals overlap?
+
 <!-- 7. Using the "overlapping confidence intervals" approach, test the hypothesis that **timesaver9000** and **lindsaynikole** have different average numbers of views. -->
 
 <!-- 8. Using the `t.test()` function, test the same hypothesis above. Interpret its output in detail. -->
@@ -72,11 +84,11 @@ Load the dataset called `tik_tok_data.csv`, located on the class site.
 
 <!-- 3. Write a function to convert any of pounds, kilograms, stone, or gram to any of the other units. Start by thinking about what arguments your function should take. There should be 3. -->
 
-End of HW1. Make sure to submit both your .qmd file and output, either
-as a self-contained HTML or PDF file (this file, as well as the starter
-template at <https://github.com/recap-org/template-r-small> are set up
-to output self-contained HTML files). And if you need help, remember the
-rule: if you can’t figure out a coding issue after spending 30 minutes
-and Googling, EMAIL US.
+**End of HW1.** Make sure to submit both your .qmd file and output,
+either as a self-contained HTML or PDF file (this file, as well as the
+starter template at <https://github.com/recap-org/template-r-small> are
+set up to output self-contained HTML files). And if you need help,
+remember the rule: if you can’t figure out a coding issue after spending
+30 minutes and Googling, EMAIL US.
 
 Good luck!
