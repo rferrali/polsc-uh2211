@@ -41,7 +41,7 @@ Create a fake `data.frame` (or `tibble`) of at least 10 observations and 5 colum
 
 ## Problem 2: Basic data manipulation and summary.
 
-Load the dataset called `tik_tok_data.csv`, located on the class site.
+Load the dataset [tik_tok_data.csv](/data/homework-1-tiktok.csv), located on the class site.
 
 1. What is the mean number of views?
 
@@ -54,6 +54,14 @@ Load the dataset called `tik_tok_data.csv`, located on the class site.
 5. Report the average number of views for the user **timesaver9000**; do the same for **lindsaynikole**. Who has a higher average number of views?
 
 6. Calculate the standard error for the mean of the number of views for **timesaver9000** and **lindsaynikole**. Which has the lower standard error? Describe why the standard error is lower in terms of variance and sample size.
+
+## Problem 3: Did soccer really get less exciting over time? (BONUS)
+
+Load the dataset [lecture-1-england.csv](/data/lecture-1-england.csv), located on the class site
+
+1. Report the average number of goals for the 1890's and 2010's decades. Which decade had more goals on average?
+2. Calculate the confidence interval for the mean number of goals in the 1890's and 2010's decades. 
+3. Do these confidence intervals overlap? 
 
 <!-- 7. Using the "overlapping confidence intervals" approach, test the hypothesis that **timesaver9000** and **lindsaynikole** have different average numbers of views. -->
 
