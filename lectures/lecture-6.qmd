@@ -1,0 +1,61 @@
+---
+title: "Lecture 6: the tidyverse"
+---
+
+Today, we're going to talk about the tidyverse, a collection of R packages that are designed to work together to make data manipulation and visualization easier. All the packages we've seen before (`readr`, `ggplot2`, `tibble`) are actually part of the tidyverse.  It also includes other packages, like `dplyr` for data manipulation, and `purrr` for functional programming, as well as many others.
+
+Our goal: make a super nice plot to definitively answer the question: did soccer get less exciting over time?
+
+```{r}
+#| label: setup
+
+library(tidyverse) # the mighty package!
+df <- read_csv("./data/lecture-1-england.csv")
+```
+
+## The pipe operator: chaining commands together
+
+```{r}
+#| label: the pipe
+
+# example: turn lowercase letters into uppercase letters, then bind them together
+```
+
+## Data manipulation with dplyr
+
+```{r}
+#| label: data manipulation
+
+# select(): let's get rid of the columns we don't need
+# rename(): I don't like upper case letters in column names, let's change them
+# mutate(): let's create the decade variable
+# filter(): remove incomplete decades
+
+# which decade was most exciting?
+# group_by() and summarize(): group-wise operations that compress data into a single row per group
+# arrange(): sorting data
+
+# which team had the most home goals relative to others?
+# group_by() and mutate(): group-wise operations that keep the same number of rows
+```
+
+```{r}
+#| label: data visualization 1
+
+# average number of goals per decade
+```
+
+## More complicated manipulation: loops (bad) vs. map functions (good)
+
+```{r}
+#| label: loops vs. map functions
+
+# let's add confidence intervals to our plot
+```
+
+
+```{r}
+#| label: data visualization 2
+
+# let's make the ultimate plot to answer the question: did soccer get less exciting over time?
+```
