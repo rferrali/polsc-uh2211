@@ -361,8 +361,130 @@ is a significant difference between the two students.
 ### How can you recycle? Use functions!
 
 Functions are great when there is a piece of code that you want to reuse
-multiple times. Here, we can create a function that calculates the
+multiple times. Here, we will create a function that calculates the
 confidence interval for a given set of grades.
+
+Functions are like in math: they take some inputs, do something with
+them, and return an output. Lt’s create a simple function, like
+$f(x) = x + 1$. When writing code, you typically handle a lot of names,
+so `f` won’t be too helpful (too short! you may get confused). We’ll
+give it a better name, `addition`.
+
+``` r
+# that's the very lengthy way to write a function in R
+addition <- function(x) {
+  # turn our input into an output
+  output <- x + 1
+  # return the output
+  return(output)
+}
+
+# let's use our function
+addition(4) # returns 5 (wohoo!)
+```
+
+    [1] 5
+
+``` r
+# more concise way to write the same function
+addition <- function(x) {
+  output <- x + 1
+  # we can omit the return() statement
+  # and just print the output we want to return instead
+  output
+}
+
+# even more concise way to write the same function
+addition <- function(x) {
+  x + 1
+}
+```
+
+Functions can have multiple arguments. For instance, we can create a
+function that adds two numbers together. In math, this would be
+$g(x, y) = x + y$. Let’s call it `super_addition` to distinguish it from
+our previous `addition` function, which only adds 1 to a number.
+
+``` r
+super_addition <- function(x, y) {
+  x + y
+}
+
+super_addition(4, 5) # returns 9
+```
+
+    [1] 9
+
+In reality, we don’t want to have two separate functions for adding one
+number and adding two numbers. We can just have one function that allows
+us to add two numbers, but that also defaults to adding 1 when we only
+give it one number. **This is what default arguments are for!** In
+practice, this allows you to make existing functions more flexible
+without breaking your old code. For instance, we can modify our
+`addition` function to allow us to add any number we want, while still
+defaulting to adding 1 when we only give it one number.
+
+``` r
+# here, if we don't give a value for y, it will default to 1
+addition <- function(x, y = 1) {
+  x + y
+}
+
+addition(4) # returns 5, as y defaults to 1
+```
+
+    [1] 5
+
+``` r
+addition(4, 5) # returns 9
+```
+
+    [1] 9
+
+``` r
+# don't forget to document your functions! that way you can remember what they do and how to use them later on
+# AI is really good at writing documentation for functions, so you can just ask it to do that for you
+# select the function code, press Shift + Cmd + I and type /doc to get AI to write documentation for you
+```
+
+Now, let’s do what we actually wanted to do: create a function that
+calculates the confidence interval for a given set of grades. This
+function will take a numeric vector as input and return the lower and
+upper bounds of the 95% confidence interval.
+
+``` r
+ci <- function(v) {
+  x_bar <- mean(v)
+  s <- sd(v)
+  std_error <- s / sqrt(n)
+  lower_bound_z <- x_bar + std_error * qnorm(p = 0.025, mean = 0, sd = 1)
+  upper_bound_z <- x_bar + std_error * qnorm(p = 0.975, mean = 0, sd = 1)
+  c(
+    "lower.bound" = lower_bound_z,
+    "upper.bound" = upper_bound_z
+  )
+}
+```
+
+Let’s use our function to calculate the confidence intervals for both
+students. They don’t overlap, so we can conclude that there is a
+significant difference between the two students.
+
+``` r
+guy <- c(49, 47)
+girl <- c(51, 53)
+ci(guy)
+```
+
+    lower.bound upper.bound 
+       46.04004    49.95996 
+
+``` r
+ci(girl)
+```
+
+    lower.bound upper.bound 
+       50.04004    53.95996 
 
 ## Approach 2: the t-test
 
@@ -392,6 +514,53 @@ statistic, usually noted $t$.
 
 > **The t-test uses the $t$ statistic to test the null hypothesis that
 > the two means are equal.**
+
+``` r
+test <- t.test(x = guy, y = girl)
+test
+```
+
+
+        Welch Two Sample t-test
+
+    data:  guy and girl
+    t = -2.8284, df = 2, p-value = 0.1056
+    alternative hypothesis: true difference in means is not equal to 0
+    95 percent confidence interval:
+     -10.08487   2.08487
+    sample estimates:
+    mean of x mean of y 
+           48        52 
+
+Interpretation:
+
+- The $t$ statistic is -2.83. Remember the $t$ statistic is the
+  equivalent of the z-score, but for a t-test.
+- The p-value is 0.1056. This is the probability of observing a
+  difference in means as extreme as the one we observed (or more
+  extreme), assuming that the two students have the same level (i.e.,
+  that the null hypothesis is true). Since this p-value is quite high
+  ($> 10\%$), we conclude that there is no significant difference
+  between the two students.
+- In fact, the observed difference of $\text{boy} - \text{girl} = -4$
+  could have been anywhere between -10.08 and 2.08 with 95% confidence.
+  Since this interval includes 0, we conclude that the students must
+  have the same level.
+
+### Why do the t-test and overlapping confidence intervals give us different answers?
+
+Our confidence intervals were calculated using the z-score, which
+assumes that we know the true $\sigma$’s. This is not the case in our
+example, where we had to estimate the $\sigma$’s from the data. The
+t-test, on the other hand, uses the $t$ statistic, which accounts for
+the fact that we are estimating the $\sigma$’s from the data. Therefore,
+the t-test is more appropriate in this case, and it gives us a more
+accurate answer.
+
+In practice, when you have a lot of data (that is, more than 30
+observations overall), the t-test and the z-test will give you very
+similar results, because the correction introduced by the t-distribution
+matters less.
 
 # Important concepts
 
