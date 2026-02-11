@@ -456,6 +456,7 @@ upper bounds of the 95% confidence interval.
 ci <- function(v) {
   x_bar <- mean(v)
   s <- sd(v)
+  n <- length(v)
   std_error <- s / sqrt(n)
   lower_bound_z <- x_bar + std_error * qnorm(p = 0.025, mean = 0, sd = 1)
   upper_bound_z <- x_bar + std_error * qnorm(p = 0.975, mean = 0, sd = 1)
