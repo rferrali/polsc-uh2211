@@ -203,13 +203,129 @@ df |>
 # group_by() and summarize(): group-wise operations that compress data into a single row per group
 # arrange(): sorting data
 
+df_decade <- df |>
+  select(season = Season, goals = totgoal) |>
+  mutate(
+    decade = floor(season / 10) * 10
+  ) |>
+  filter(decade > 1880, decade < 2020)
+
+df_decade |>
+  group_by(decade) |>
+  summarize(goals = mean(goals)) |>
+  arrange(-goals)
+```
+
+    # A tibble: 13 × 2
+       decade goals
+        <dbl> <dbl>
+     1   1890  3.61
+     2   1930  3.37
+     3   1950  3.24
+     4   1920  3.06
+     5   1960  3.03
+     6   1900  2.99
+     7   1940  2.94
+     8   1910  2.86
+     9   1980  2.66
+    10   2010  2.63
+    11   1990  2.58
+    12   2000  2.57
+    13   1970  2.55
+
+``` r
 # which team had the most home goals relative to others?
 # group_by() and mutate(): group-wise operations that keep the same number of rows
+
+df |>
+  select(season = Season, team = home, goals = hgoal) |>
+  mutate(
+    decade = floor(season / 10) * 10
+  ) |>
+  filter(decade > 1880, decade < 2020) |>
+  group_by(decade, team) |>
+  summarize(goals = mean(goals)) |>
+  group_by(decade) |>
+  mutate(goals = goals - mean(goals)) |>
+  ungroup() |>
+  arrange(-goals)
 ```
+
+    `summarise()` has grouped output by 'decade'. You can override using the
+    `.groups` argument.
+
+    # A tibble: 1,092 × 3
+       decade team              goals
+        <dbl> <chr>             <dbl>
+     1   2010 Manchester City   1.17 
+     2   1920 Carlisle United   0.958
+     3   1940 Rotherham United  0.940
+     4   1890 Aston Villa       0.884
+     5   1890 Birmingham City   0.859
+     6   1890 Bootle            0.856
+     7   2000 Arsenal           0.820
+     8   2000 Manchester United 0.762
+     9   1930 Everton           0.738
+    10   2000 Chelsea           0.731
+    # ℹ 1,082 more rows
 
 ## More complicated manipulation: loops (bad) vs. map functions (good)
 
 ``` r
+ci <- function(v) {
+  x_bar <- mean(v)
+  s <- sd(v)
+  n <- length(v)
+  std_error <- s / sqrt(n)
+  lower_bound_z <- x_bar + std_error * qnorm(p = 0.025, mean = 0, sd = 1)
+  upper_bound_z <- x_bar + std_error * qnorm(p = 0.975, mean = 0, sd = 1)
+  c(
+    "lower.bound" = lower_bound_z,
+    "upper.bound" = upper_bound_z
+  )
+}
+
+df_decade
+```
+
+    # A tibble: 199,620 × 3
+       season goals decade
+        <dbl> <dbl>  <dbl>
+     1   1890     2   1890
+     2   1890     6   1890
+     3   1890    13   1890
+     4   1890     5   1890
+     5   1890     3   1890
+     6   1890     5   1890
+     7   1890     0   1890
+     8   1890     4   1890
+     9   1890     5   1890
+    10   1890     3   1890
+    # ℹ 199,610 more rows
+
+``` r
+pl <- tibble(
+  decade = numeric(),
+  goals = numeric(),
+  lower.bound = numeric(),
+  upper.bound = numeric()
+)
+
+decades <- unique(df_decade$decade)
+
+for (this_decade in decades) {
+  this_data <- df_decade |>
+    filter(decade == this_decade)
+  this_ci <- ci(this_data$goals)
+  this_pl <- tibble(
+    decade = this_decade,
+    goals = mean(this_data$goals),
+    lower.bound = this_ci["lower.bound"],
+    upper.bound = this_ci["upper.bound"]
+  )
+  pl <- bind_rows(pl, this_pl)
+}
+
 # let's add confidence intervals to our plot
 ```
 

@@ -116,14 +116,75 @@ df |>
 # group_by() and summarize(): group-wise operations that compress data into a single row per group
 # arrange(): sorting data
 
+df_decade <- df |>
+  select(season = Season, goals = totgoal) |>
+  mutate(
+    decade = floor(season / 10) * 10
+  ) |>
+  filter(decade > 1880, decade < 2020)
+
+df_decade |>
+  group_by(decade) |>
+  summarize(goals = mean(goals)) |>
+  arrange(-goals)
+
 # which team had the most home goals relative to others?
 # group_by() and mutate(): group-wise operations that keep the same number of rows
+
+df |>
+  select(season = Season, team = home, goals = hgoal) |>
+  mutate(
+    decade = floor(season / 10) * 10
+  ) |>
+  filter(decade > 1880, decade < 2020) |>
+  group_by(decade, team) |>
+  summarize(goals = mean(goals)) |>
+  group_by(decade) |>
+  mutate(goals = goals - mean(goals)) |>
+  ungroup() |>
+  arrange(-goals)
 ```
 
 ## More complicated manipulation: loops (bad) vs. map functions (good)
 
 ```{r}
 #| label: loops vs. map functions
+
+ci <- function(v) {
+  x_bar <- mean(v)
+  s <- sd(v)
+  n <- length(v)
+  std_error <- s / sqrt(n)
+  lower_bound_z <- x_bar + std_error * qnorm(p = 0.025, mean = 0, sd = 1)
+  upper_bound_z <- x_bar + std_error * qnorm(p = 0.975, mean = 0, sd = 1)
+  c(
+    "lower.bound" = lower_bound_z,
+    "upper.bound" = upper_bound_z
+  )
+}
+
+df_decade
+pl <- tibble(
+  decade = numeric(),
+  goals = numeric(),
+  lower.bound = numeric(),
+  upper.bound = numeric()
+)
+
+decades <- unique(df_decade$decade)
+
+for (this_decade in decades) {
+  this_data <- df_decade |>
+    filter(decade == this_decade)
+  this_ci <- ci(this_data$goals)
+  this_pl <- tibble(
+    decade = this_decade,
+    goals = mean(this_data$goals),
+    lower.bound = this_ci["lower.bound"],
+    upper.bound = this_ci["upper.bound"]
+  )
+  pl <- bind_rows(pl, this_pl)
+}
 
 # let's add confidence intervals to our plot
 ```
