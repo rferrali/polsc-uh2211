@@ -9,6 +9,7 @@ format: revealjs
 library(tidyverse)
 library(haven)
 library(modelsummary)
+library(fixest)
 
 df <- bind_rows(
   read_dta("./data/practicum-jan-2014.dta") |> mutate(after = 0),
@@ -382,5 +383,553 @@ list(
 ## Moderators: resentment, nationalism, news-watching.
 
 - We measure most of our moderators at the time of the survey, so for the "after" survey, we measure it after the annexation. This means that we can't rule out that the annexation caused an increase in resentment or nationalism, which in turn caused an increase in approval. In other words, we can't rule out that resentment and nationalism are **mediators** rather than **moderators** of the effect of annexation on approval.
-- Only one of our moderators should be measured before annexation (vote for Zhirinovsky)
+- Only one of our moderators has been measured before annexation (vote for Zhirinovsky)
 - $\Rightarrow$ **panel** data with the same respondents before and after annexation would allow us to measure all moderators before annexation and thus establish causality more convincingly.
+
+# Establishing causality with panel data
+
+## A new running example
+
+We leave Crimea and move to Denmark in 2010–2011.
+
+- In 2011 the Danish **Liberal Party** (*Venstre*, "V") suddenly reversed its long-standing position on two welfare policies:
+  - halving the maximum unemployment benefits period from 4 to 2 years,
+  - abolishing the early-retirement pension (*efterløn*).
+- The **Danish People's Party** (*Dansk Folkeparti*, "DF") supported the Liberals on unemployment benefits.
+- A five-wave panel survey happened to be in the field *right around* these switches (Slothuus & Bisgaard 2021, AJPS).
+
+. . .
+
+Question for us: **did Liberal-leaning voters change their opinions when their party changed its position?**
+
+## The data
+
+```{r}
+#| label: danish-load
+
+danish <- read_csv("data/lecture-20-21-danish.csv", show_col_types = FALSE)
+danish
+```
+
+- `respondent_id` — 2,902 unique Danes
+- `wave` — 1 to 5 (five survey waves in 2010–2011)
+- `party` — the respondent's party at wave 1
+- `benefit_cut_support` — 0–1 scale, higher = more support for cutting unemployment benefits
+
+## Why this is a better setup than Crimea
+
+- Same people, surveyed repeatedly $\Rightarrow$ we can tell time-varying changes from stable personal characteristics.
+- A treatment group: Liberal and Danish People's Party supporters — their party switched.
+- A control group: supporters of parties that *didn't* switch.
+
+. . .
+
+If Liberal supporters shift toward shorter benefits between two waves, is that enough to claim the party caused the shift? What else could have happened in the meantime?
+
+## A first look
+
+We focus on waves 2 and 3, bracketing the Liberal Party's switch on unemployment benefits. Let's plot the average support for cutting unemployment benefits, separately for treated (Liberal / DPP) and control (other parties) respondents, before and after the switch.
+
+```{r}
+#| label: first-look
+
+danish |>
+  filter(wave %in% c(2, 3), !is.na(party)) |>
+  mutate(
+    group = ifelse(party %in% c("V", "DF"), "Liberal / DPP", "Other parties"),
+    wave_label = ifelse(wave == 2, "Before switch", "After switch")
+  ) |>
+  group_by(group, wave_label) |>
+  summarize(
+    mean_support = mean(benefit_cut_support, na.rm = TRUE)
+  ) |>
+  ggplot(aes(
+    x = factor(wave_label, levels = c("Before switch", "After switch")),
+    y = mean_support,
+    color = group,
+    group = group
+  )) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  labs(
+    x = NULL,
+    y = "Support for cutting unemployment benefits",
+    color = NULL,
+    title = "Did Liberal/DPP supporters move more than others?"
+  ) +
+  theme_minimal()
+```
+
+## Is this causal?
+
+- What does the *gap between the two lines* measure at each wave?
+- What does the *change in the gap* from before to after measure?
+- What would have to be true for the widening of the gap to be the causal effect of the Liberal Party's position switch?
+
+
+# Difference-in-differences
+
+## Two bad comparisons
+
+We want to know: **what effect did the Liberal and DPP policy position change have on their supporters' support for said policy?**
+
+. . .
+
+Two bad comparisons: 
+
+1. Treated group (after) - Treated group (before)
+2. Treated group (after) - Control group (after)
+
+. . .
+
+1. Bad because other things could have changed between before and after, besides the party switch. Maybe the economy got worse, or there was a news event that made people more supportive of cutting benefits.
+2. Bad because the treated and control groups are different people, so their support levels could differ for reasons unrelated to the party switch.
+
+## Combining them makes for a good comparison
+
+We compare:
+
+- the pre-to-post change among **treated** respondents (Liberal + Danish People's supporters)
+- to the pre-to-post change among **control** respondents (everyone else)
+
+**Key takeaway.** We use the control group's pre-to-post change to estimate the "secular trend"/counterfactual — how much treated respondents would have moved too, even without the party switch. Then we see if treated respondents moved *more* than that.
+
+## The 2 × 2 table
+
+```{r}
+#| label: did-means
+
+danish_23 <- danish |>
+  filter(wave %in% c(2, 3), !is.na(party)) |>
+  mutate(
+    treated = as.integer(party %in% c("V", "DF")),
+    post = as.integer(wave == 3)
+  )
+
+danish_23 |>
+  group_by(treated, post) |>
+  summarize(
+    mean_support = mean(benefit_cut_support, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+Four numbers — one for each (treated, post) cell.
+
+## The difference-in-differences estimator
+
+Using the four cell means:
+
+$$
+\widehat{\text{DiD}} = \bigl(\bar y_{T,\text{post}} - \bar y_{T,\text{pre}}\bigr) - \bigl(\bar y_{C,\text{post}} - \bar y_{C,\text{pre}}\bigr)
+$$
+
+- First term: how much treated respondents moved.
+- Second term: how much control respondents moved (the "secular trend" — everything that would have happened to treated respondents too, even without the party switch).
+- Difference: the *extra* movement among the treated, attributable to the treatment.
+
+## As a regression
+
+The 2 × 2 difference-in-differences is just a regression with an interaction:
+
+```{r}
+#| label: did-reg
+
+lm(benefit_cut_support ~ treated * post, data = danish_23) |>
+  modelsummary(
+    stars = TRUE,
+    gof_map = c("nobs", "r.squared")
+  )
+```
+
+- Intercept: control group, before.
+- `treated`: control-vs-treated gap *before* the switch.
+- `post`: pre-to-post change for the control group.
+- `treated:post`: **the difference-in-differences** — extra movement for treated respondents.
+
+## The assumption we rely on
+
+For the difference-in-differences to be the causal effect of the party switch, we need to believe:
+
+> In the absence of the switch, Liberal/DPP supporters would have moved on this issue by the same amount as supporters of other parties.
+
+. . .
+
+i.e., the time dynamics of the control group are a credible counterfactual for the time dynamics of the treated group, had they not been treated.
+
+. . .
+
+This is called the **parallel trends assumption**.
+
+. . .
+
+We can't test it directly — it's a counterfactual. But we can look at whether the two groups were moving in parallel *before* the treatment.
+
+## A plausibility check
+
+We have an earlier wave (wave 1) — before wave 2. If parallel trends holds, the treated and control groups should have moved roughly in parallel from wave 1 to wave 2, when nothing special was happening.
+
+```{r}
+#| label: pretrend-plot
+
+danish |>
+  filter(!is.na(party), wave <= 3) |>
+  mutate(
+    treated = ifelse(party %in% c("V", "DF"), "Treatment", "Control")
+  ) |>
+  group_by(treated, wave) |>
+  summarize(
+    mean_support = mean(benefit_cut_support, na.rm = TRUE)
+  ) |>
+  ggplot(aes(x = wave, y = mean_support, color = factor(treated))) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:3, labels = c("Wave 1", "Wave 2", "Wave 3")) +
+  labs(
+    x = NULL,
+    y = "Support for cutting unemployment benefits",
+    color = NULL,
+    title = "Pre-treatment trends"
+  )
+```
+
+```{r}
+#| label: pretrend-reg
+
+danish |>
+  filter(wave %in% c(1, 2), !is.na(party)) |>
+  mutate(
+    treated = as.integer(party %in% c("V", "DF")),
+    post12 = as.integer(wave == 2)
+  ) |>
+  lm(benefit_cut_support ~ treated * post12, data = _) |>
+  modelsummary(
+    stars = TRUE,
+    gof_map = c("nobs", "r.squared")
+  )
+```
+
+A small, statistically insignificant interaction is reassuring (but not proof). A big one would be a warning sign.
+
+. . .
+
+Classroom discussion: what real-world process could make parallel trends fail here?
+
+# Unit fixed effects
+
+## Using the panel structure
+
+We have a difference-in-differences estimate. But notice: our regression so far doesn't use the fact that we see the *same* respondents at wave 2 and wave 3. We're just treating the data as two independent cross-sections of treated and control respondents.
+
+. . .
+
+Unit fixed effects let us lean on the panel structure directly: we give each respondent their own intercept, which soaks up **everything stable about them** — deep partisanship, personality, childhood, education, …
+
+. . .
+
+That sharpens our design. Let's build it up.
+
+## We already know dummy variables
+
+Back in the regression lectures we added dummies to shift the intercept:
+
+$$
+y_i = \alpha + \beta_1 \cdot \text{female}_i + \beta_2 x_i + \varepsilon_i
+$$
+
+The dummy `female` adds a constant to women's predicted outcome — essentially, women get their own intercept.
+
+. . .
+
+- Males: $y_i = \underbrace{\alpha}_{\alpha_{\text{male}}} + \beta_2 x_i + \varepsilon_i$
+- Females: $y_i = \underbrace{(\alpha + \beta_1)}_{\alpha_{\text{female}}} + \beta_2 x_i + \varepsilon_i$
+
+. . .
+
+**What if we had one dummy per individual?**
+
+## A tiny toy panel
+
+```{r}
+#| label: toy-panel
+
+toy <- tribble(
+  ~id , ~wave  , ~opinion ,
+  "A" , "pre"  ,        2 ,
+  "A" , "post" ,        4 ,
+  "B" , "pre"  ,        3 ,
+  "B" , "post" ,        5 ,
+  "C" , "pre"  ,        8 ,
+  "C" , "post" ,        9 ,
+  "D" , "pre"  ,        7 ,
+  "D" , "post" ,        9
+) |>
+  mutate(
+    post = as.integer(wave == "post"),
+    id = factor(id)
+  )
+
+toy
+```
+
+Four people, two waves each. Notice:
+
+- Person C starts much higher than person A — stable personal differences.
+- Everyone moves *up* from pre to post — but by different amounts.
+
+## Regression with one dummy per person
+
+```{r}
+#| label: toy-fe
+
+lm(opinion ~ id + post, data = toy) |>
+  summary()
+```
+
+- The coefficients on `idB`, `idC`, `idD` are person-specific intercepts — how much that person's baseline differs from person A's.
+- The coefficient on `post` is the average *within-person* change from pre to post: A went up by 2, B by 2, C by 1, D by 2, so the average is 1.75.
+
+. . .
+
+- Person A: $y_{A,t} = \underbrace{\text{Intercept}}_{\alpha_A} + \beta \cdot \text{post}_t + \varepsilon_{A,t}$
+- Person B: $y_{B,t} = \underbrace{(\text{Intercept} + \text{idB})}_{\alpha_B} + \beta \cdot \text{post}_t + \varepsilon_{B,t}$
+
+. . .
+
+Those person-specific intercepts are called **unit fixed effects**.
+
+## What unit fixed effects do
+
+A unit fixed effect gives each person their own intercept that soaks up **everything stable about them**:
+
+- personality, childhood, genetics, permanent income, deep partisanship, upbringing, education (for adults), …
+- anything we can't measure, too.
+
+. . .
+
+As long as those characteristics don't change over time, they **cannot bias** the coefficient on a variable that *does* change over time — the person's fixed effect has already absorbed them.
+
+. . .
+
+This is exactly what we couldn't do with Crimea: we never saw the same respondent twice.
+
+## The fixed-effects model
+
+- $y_{it}$: $i$'s outcome at time $t$
+- $x_{it}$: $i$'s time-varying characteristics at time $t$ (e.g. news consumption this month, current income)
+- $x_i$: $i$'s time-invariant characteristics (e.g. year of birth, childhood socialization, deep personality traits)
+
+. . .
+
+$$
+y_{it} = \alpha + \beta_1 \text{income}_{it} + \beta_2 \text{female}_i + \beta_3 \text{birthplace}_i + \varepsilon_{it}
+$$
+
+. . .
+
+Fixed effects throw away all the $x_i$ variation by giving each person their own intercept:
+
+$$
+y_{it} = \alpha_i + \beta_1 \text{income}_{it} + \varepsilon_{it}
+$$
+
+. . . 
+
+**Important.** you cannot include any time-invariant variable (e.g. `female`, `birthplace`) in a fixed-effects regression, because their effect is already absorbed by the unit fixed effect. The following regression cannot be estimated:
+
+$$
+y_{it} = \alpha_i + \beta_1 \text{income}_{it} + \beta_2 \text{gender}_i + \varepsilon_{it}
+$$
+
+## Using fixed effects in difference-in-differences
+
+Back to our difference-in-differences regression, now with a unit fixed effect per respondent:
+
+$$
+y_{it} = \alpha_i + \beta_1 \cdot \text{post}_t + \beta_2 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}
+$$
+
+- $\alpha_i$: person $i$'s own intercept (their unit fixed effect).
+- $\text{post}_t$: 1 if observation is from the post period, 0 otherwise.
+- $\text{treated}_i \times \text{post}_t$: 1 if person $i$ is treated *and* we're in the post period.
+- $\beta_2$: the difference-in-differences.
+
+. . .
+
+Notice what's *missing*: the standalone `treated` term. It's already absorbed by $\alpha_i$, because `treated` doesn't change over time for a given person — it's just one of their stable characteristics. The fixed effect has already done that work.
+
+## The within-person view
+
+Another way to think about it: for each person, subtract their own average from their outcome.
+
+```{r}
+#| label: toy-within
+
+toy <- toy |>
+  group_by(id) |>
+  mutate(
+    opinion_demeaned = opinion - mean(opinion),
+    post_demeaned = post - mean(post)
+  ) |>
+  ungroup()
+toy
+```
+
+Running `lm(opinion_demeaned ~ post_demeaned)` on the demeaned data gives *exactly* the same `post` coefficient as the dummy-variable regression. Unit fixed effects = "subtract each person's mean, then regress."
+
+. . .
+
+In words: unit fixed effects throw away all the *between-person* variation and use only the *within-person* movement to estimate the treatment effect. Any stable personal characteristic gets subtracted out in the demeaning step and cannot bias the treatment coefficient.
+
+## Let's double check
+
+```{r}
+#| label: toy-demean-fe
+
+list(
+  lm(opinion ~ id + post, data = toy),
+  lm(opinion_demeaned ~ post_demeaned, data = toy)
+) |>
+  modelsummary(
+    stars = TRUE,
+    coef_rename = c("post" = "Post", "post_demeaned" = "Post (demeaned)"),
+    gof_map = c("nobs", "r.squared")
+  )
+```
+
+## Doing this efficiently with `fixest`
+
+With 2,902 Danes, writing out 2,902 dummies is a bad idea. The `fixest` package handles fixed effects efficiently (using the "within" transformation under the hood, so it doesn't actually create 2,902 dummy variables):
+
+```{r}
+#| label: fixest-toy
+feols(opinion ~ post | id, data = toy)
+```
+
+The `| id` part says "absorb a unit fixed effect for `id`." Same estimate as `lm(opinion ~ id + post, data = toy)`, but fast.
+
+## On the real data
+
+Let's run our difference-in-differences two ways: the plain interaction regression, then the same regression with a unit fixed effect per respondent.
+
+```{r}
+#| label: fixest-danish
+
+list(
+  "DiD" = feols(benefit_cut_support ~ treated * post, data = danish_23),
+  "DiD + unit FE" = feols(
+    benefit_cut_support ~ post + treated:post | respondent_id,
+    data = danish_23
+  )
+) |>
+  modelsummary(
+    stars = TRUE,
+    coef_map = c(
+      "treated:post" = "Treated x Post",
+      "post:treated" = "Treated x Post",
+      "post" = "Post",
+      "treated" = "Treated"
+    ),
+    gof_map = c("nobs", "r.squared")
+  )
+```
+
+- Same treatment-effect coefficient. The difference-in-differences number is unchanged.
+- But the unit fixed effect has absorbed every stable characteristic of each respondent — we're now identifying the effect from *within-person* movement only.
+- And notice the `treated` main effect disappeared in the second column: it's been swallowed by the respondent fixed effects.
+
+# Time fixed effects
+
+## What was `post` actually doing?
+
+Look back at our regression:
+
+$$
+y_{it} = \alpha + \beta_1 \cdot \text{treated}_i + \beta_2 \cdot \text{post}_t + \beta_3 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}
+$$
+
+- `post` is just a dummy for the second wave.
+- It's a **time fixed effect** with only two values.
+
+. . .
+
+Time fixed effects absorb anything that hit *everyone* at the same moment — an economic shock, a news cycle, the weather.
+
+## Time fixed effects in general
+
+With more waves, we'd want one dummy per wave:
+
+$$
+y_{it} = \alpha_i + \gamma_t + \beta \cdot T_{it} + \varepsilon_{it}
+$$
+
+- $\alpha_i$: unit fixed effect (person's own intercept).
+- $\alpha_t$: time fixed effect (wave-specific intercept).
+- $T_{it}$: 1 if person $i$ is in the treated group *and* wave $t$ is after the switch, 0 otherwise.
+- $\beta$: the effect of being treated in a treated period.
+
+. . .
+
+This specification is called **two-way fixed effects**: one set of dummies for units, one set for time.
+
+## What each piece absorbs
+
+- **Unit fixed effects** $\alpha_i$: everything stable about a person (personality, baseline partisanship, deep values).
+- **Time fixed effects** $\alpha_t$: everything shared across people in a given period (the state of the economy, a media event, the weather).
+- **Treatment indicator** $T_{it}$: the only thing left is the "extra something" that hits treated units in treated periods.
+
+$\beta$ captures that extra something.
+
+## The punchline: same answer as the 2 × 2
+
+```{r}
+#| label: twfe-equal
+
+list(
+  "DiD (interaction)" = feols(
+    benefit_cut_support ~ treated * post,
+    data = danish_23
+  ),
+  "DiD + unit FE" = feols(
+    benefit_cut_support ~ post + treated:post | respondent_id,
+    data = danish_23
+  ),
+  "Two-way FE" = feols(
+    benefit_cut_support ~ treated:post | respondent_id + wave,
+    data = danish_23
+  )
+) |>
+  modelsummary(
+    stars = TRUE,
+    coef_map = c(
+      "treated:post" = "Treated x Post",
+      "post:treated" = "Treated x Post",
+      "post" = "Post",
+      "treated" = "Treated"
+    ),
+    gof_map = c("nobs", "r.squared")
+  )
+```
+
+All three land on the same number. In the simple 2 × 2 case, **two-way fixed effects is difference-in-differences**.
+
+## Why bother with the two-way-fixed-effects form?
+
+Because it **scales** to situations the interaction form can't handle easily:
+
+- more than two waves
+- more than two groups
+- different units getting treated at different times (*staggered* treatment)
+
+. . .
+
+With staggered treatment there are subtleties we won't cover in this course — there's a recent literature (around 2020–2023) that fixes problems with the classical two-way fixed effects estimator when treatment timing varies across units. 
+
+## Wrap-up
+
+- Started with a **picture**: treated and control group, before and after. The widening of the gap *looked like* a party-switch effect.
+- **Difference-in-differences** formalizes that intuition: the 2 × 2 table, or equivalently a regression with an interaction term.
+- **Unit fixed effects** sharpen the design by isolating within-person variation: every stable personal characteristic is absorbed, so it cannot bias the treatment coefficient.
+- **Time fixed effects** generalize the `post` dummy to many periods and absorb anything that hit everyone at the same moment.
+- **Two-way fixed effects** = unit + time fixed effects. In the simple 2 × 2 case, it's the same number as the interaction regression, but it scales.
+- **Parallel trends** remains the crucial, untestable assumption behind all of these.
