@@ -5,7 +5,6 @@ format: revealjs
 
 ```{r}
 #| label: setup
-
 library(tidyverse)
 library(haven)
 library(modelsummary)
@@ -64,7 +63,6 @@ Why did the annexation of Crimea boost his approval?
 
 ```{r}
 #| label: approval-plot simple
-
 df |>
   group_by(after) |>
   summarize(approval = mean(approval, na.rm = T)) |>
@@ -97,7 +95,6 @@ $$
 
 ```{r}
 #| label: approval-reg simple
-
 lm(approval ~ after, data = df) |>
   modelsummary(
     stars = TRUE,
@@ -110,7 +107,6 @@ lm(approval ~ after, data = df) |>
 
 ```{r}
 #| label: approval-plot
-
 lm(approval ~ after, data = df) |>
   broom::augment(
     newdata = tibble(after = c(0, 1)),
@@ -142,7 +138,6 @@ lm(approval ~ after, data = df) |>
 
 ```{r}
 #| label: approval-plot resentment
-
 df |>
   group_by(after, us_disapprov) |>
   summarize(approval = mean(approval, na.rm = T)) |>
@@ -190,7 +185,6 @@ $$
 
 ```{r}
 #| label: approval-reg resentment
-
 lm(approval ~ after * us_disapprov, data = df) |>
   modelsummary(
     stars = TRUE,
@@ -206,7 +200,6 @@ lm(approval ~ after * us_disapprov, data = df) |>
 
 ```{r}
 #| label: approval-reg resentment controls
-
 list(
   lm(approval ~ after, data = df),
   lm(approval ~ after * us_disapprov, data = df),
@@ -230,7 +223,6 @@ list(
 
 ```{r}
 #| label: robustness resentment
-
 list(
   lm(approval ~ after * us_disapprov, data = df),
   lm(approval ~ after * us_disapprov + age + female + educ, data = df),
@@ -280,7 +272,6 @@ list(
 
 ```{r}
 #| label: robustness
-
 list(
   lm(approval ~ after * int_yes, data = df),
   lm(approval ~ after * int_yes + age + female + educ, data = df),
@@ -325,7 +316,6 @@ list(
 
 ```{r}
 #| label: robustness territorial
-
 list(
   lm(approval ~ after * ukraine_disapprov, data = df),
   lm(approval ~ after * ukraine_disapprov + age + female + educ, data = df),
@@ -406,7 +396,6 @@ Question for us: **did Liberal-leaning voters change their opinions when their p
 
 ```{r}
 #| label: danish-load
-
 danish <- read_csv("data/lecture-20-21-danish.csv", show_col_types = FALSE)
 danish
 ```
@@ -432,7 +421,6 @@ We focus on waves 2 and 3, bracketing the Liberal Party's switch on unemployment
 
 ```{r}
 #| label: first-look
-
 danish |>
   filter(wave %in% c(2, 3), !is.na(party)) |>
   mutate(
@@ -498,7 +486,6 @@ We compare:
 
 ```{r}
 #| label: did-means
-
 danish_23 <- danish |>
   filter(wave %in% c(2, 3), !is.na(party)) |>
   mutate(
@@ -534,7 +521,6 @@ The 2 × 2 difference-in-differences is just a regression with an interaction:
 
 ```{r}
 #| label: did-reg
-
 lm(benefit_cut_support ~ treated * post, data = danish_23) |>
   modelsummary(
     stars = TRUE,
@@ -565,13 +551,12 @@ This is called the **parallel trends assumption**.
 
 We can't test it directly — it's a counterfactual. But we can look at whether the two groups were moving in parallel *before* the treatment.
 
-## A plausibility check
+## A plausibility check, eyeball test
 
 We have an earlier wave (wave 1) — before wave 2. If parallel trends holds, the treated and control groups should have moved roughly in parallel from wave 1 to wave 2, when nothing special was happening.
 
 ```{r}
 #| label: pretrend-plot
-
 danish |>
   filter(!is.na(party), wave <= 3) |>
   mutate(
@@ -593,9 +578,10 @@ danish |>
   )
 ```
 
+## A plausibility check, now with regression
+
 ```{r}
 #| label: pretrend-reg
-
 danish |>
   filter(wave %in% c(1, 2), !is.na(party)) |>
   mutate(
@@ -652,7 +638,6 @@ The dummy `female` adds a constant to women's predicted outcome — essentially,
 
 ```{r}
 #| label: toy-panel
-
 toy <- tribble(
   ~id , ~wave  , ~opinion ,
   "A" , "pre"  ,        2 ,
@@ -681,7 +666,6 @@ Four people, two waves each. Notice:
 
 ```{r}
 #| label: toy-fe
-
 lm(opinion ~ id + post, data = toy) |>
   summary()
 ```
@@ -764,7 +748,6 @@ Another way to think about it: for each person, subtract their own average from 
 
 ```{r}
 #| label: toy-within
-
 toy <- toy |>
   group_by(id) |>
   mutate(
@@ -785,7 +768,6 @@ In words: unit fixed effects throw away all the *between-person* variation and u
 
 ```{r}
 #| label: toy-demean-fe
-
 list(
   lm(opinion ~ id + post, data = toy),
   lm(opinion_demeaned ~ post_demeaned, data = toy)
@@ -814,7 +796,6 @@ Let's run our difference-in-differences two ways: the plain interaction regressi
 
 ```{r}
 #| label: fixest-danish
-
 list(
   "DiD" = feols(benefit_cut_support ~ treated * post, data = danish_23),
   "DiD + unit FE" = feols(
@@ -884,7 +865,6 @@ $\beta$ captures that extra something.
 
 ```{r}
 #| label: twfe-equal
-
 list(
   "DiD (interaction)" = feols(
     benefit_cut_support ~ treated * post,

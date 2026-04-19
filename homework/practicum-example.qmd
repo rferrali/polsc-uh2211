@@ -1,0 +1,109 @@
+---
+title: "Example Practicum"
+execute:
+    echo: false
+    message: false
+    warning: false
+---
+
+> This is a partial response to the practicum assignment, meant to illustrate how to approach the assignment and how to write up your results. It is not a complete response, but is meant to illustrate how to approach describing data and results clearly, accurately, and in a way that is both accessible to a non-technical audience, yet satisfies more technical readers.
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(haven)
+library(modelsummary)
+
+df <- bind_rows(
+  read_dta("./data/practicum-jan-2014.dta") |> mutate(after = 0),
+  read_dta("./data/practicum-may-2014.dta") |> mutate(after = 1)
+) |>
+  # data cleaning
+  mutate(
+    approval = putinapprov,
+    int_yes = 1 - int_nono,
+    us_disapprov = 1 - usapprov,
+    eu_disapprov = 1 - euapprov,
+    ukraine_disapprov = 1 - ukrapprov
+  )
+```
+
+Following the annexation of Crimea in Februrary 2014, Vladimir Putin's approval ratings soared. The Levada Center, a respected and reliable polling institution in Russia, conducts regular public opinion polls on large (about 1,600 respondents), representative samples of the Russian population. In their January 2014 survey, Putin's approval rating was `r round(mean(df$approval[df$after == 0], na.rm = TRUE) * 100, 1)`%, while in their May 2014 survey, it increased to `r round(mean(df$approval[df$after == 1], na.rm = TRUE) * 100, 1)`%, an important and statistically significant increase.
+
+Some have argued that the annexation of Crimea boosted Putin's approval ratings because of the Russian state propaganda machine, mostly through television. While the Levada Center surveys do not measure TV consumption directly, several questions featured in the survey allow evaluating the claim, albeit imperfectly. In particular, the survey asks respondents how many recent news events they can recall, which can be used as a proxy for news consumption. If the propaganda machine was responsible for the increase in approval, we would expect that people who consume more news would show larger increases in approval following the annexation of Crimea. 
+
+@fig-news-consumption below shows that after the war, respondents all had a level of approval hovering around 90%, regardless of how many news events they recalled. In contrast, before the war, there was a clear negative relationship between news consumption and approval: people who recalled more news events were more likely to disapprove of Putin. This, in turn, implies that respondents who consumed more news saw their approval increase more than respondents less exposed to political news. At first sight, the pattern would thus support our hypothesis: after the annexation, the propaganda machine disproportionately garnered the support of heavy consumers of political news.
+
+```{r}
+#| label: fig-news-consumption
+#| fig-cap: "Approval ratings by news consumption before and after the annexation of Crimea. Points and thin lines represent raw data averages, while thick lines represent linear trends."
+df |>
+  group_by(after, pol_news_count) |>
+  summarize(approval = mean(approval, na.rm = TRUE)) |>
+  mutate(
+    after = ifelse(after == 0, "Before annexation", "After annexation")
+  ) |>
+  ggplot(aes(x = pol_news_count, y = approval, color = after)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_continuous(
+    labels = scales::percent,
+    limits = c(0, 1),
+    breaks = seq(0, 1, by = 0.2)
+  ) +
+  scale_x_continuous(breaks = seq(0, 14, 2)) +
+  labs(
+    x = "Number of political news events recalled",
+    y = "Approval rating",
+    color = NULL
+  ) +
+  theme(legend.position = "bottom")
+```
+
+Yet, the insight does not withstand further scrutiny. First, while important, the observed differential increase in approval is not statistically significant at conventional levels. Second, we used regression analysis to make more pointed comparisons and thus improve the precision of our estimates. Comparing individuals before and after the annexation that shared not only the same level of news consumption, but also the same gender, age, and education level, we still find that the observed differential increase is not statistically significant. We also examined other proxies for news consumption, including (1) a binary variable indicating whether respondents recalled any news event, (2) whether respondents used the internet at all, and whether they used the internet for news. In all cases, we found no evidence that the increase in approval was significantly larger among heavy consumers of political news (see @tbl-regression for details).
+
+## Appendix
+
+```{r}
+#| label: tbl-regression
+#| tbl-cap: "Regression results for the relationship between news consumption and approval ratings before and after the annexation of Crimea. Controls include age, gender, and education level. The Yes category for the interaction term indicates that the respondent recalled at least one news event, used the internet, or used the internet for news, depending on the model."
+list(
+  lm(approval ~ after * pol_news + age + female + educ, data = df),
+  lm(approval ~ after * pol_news_count + age + female + educ, data = df),
+  lm(approval ~ after * int_yes, data = df),
+  lm(approval ~ after * int_yes + age + female + educ, data = df),
+  lm(approval ~ after * int_news, data = df),
+  lm(approval ~ after * int_news + age + female + educ, data = df),
+  lm(approval ~ after * pol_news, data = df),
+  lm(approval ~ after * pol_news_count, data = df)
+) |>
+  modelsummary(
+    stars = TRUE,
+    coef_map = c(
+      "after" = "After",
+      "int_yes" = "Yes",
+      "int_news" = "Yes",
+      "pol_news" = "Yes",
+      "pol_news_count" = "Yes",
+      "after:int_yes" = "After x Yes",
+      "after:int_news" = "After x Yes",
+      "after:pol_news" = "After x Yes",
+      "after:pol_news_count" = "After x Yes"
+    ),
+    gof_map = c("nobs", "r.squared"),
+    add_rows = matrix(
+      c("Controls", rep(c("No", "Yes"), 4)),
+      nrow = 1
+    ) |>
+      as.data.frame()
+  ) |>
+  tinytable::group_tt(
+    j = list(
+      "Remembers (count)" = 2:3,
+      "Remembers (binary)" = 4:5,
+      "Internet" = 6:7,
+      "Internet for news" = 8:9
+    )
+  )
+```
