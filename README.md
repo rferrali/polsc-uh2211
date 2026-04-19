@@ -27,6 +27,7 @@ Lecture notes for course POLSC-UH2211
 - [Homework 2](/docs/homework/homework-2.md)
 - [Homework 3](/docs/homework/homework-3.md)
 - [Practicum](docs/homework/practicum.md) (example solution [here](docs/homework/practicum-example.md))
+- [Final project](docs/homework/final-project.md)
 
 ## Getting started
 
