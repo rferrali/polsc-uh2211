@@ -7,6 +7,8 @@ Feel free to use the starter template at [https://github.com/recap-org/template-
 
 In this project, you should find or construct some data, develop a hypothesis, analyze the data to test that hypothesis, produce publication-quality data visualizations, and carefully interpret your results. 
 
+The project should be no less than 3 pages and include at least 2 data visualizations. It should be turned in as a `.pdf` file, and the `.qmd` file with the commented code for your analyses should also be submitted, alongside with the raw data.
+
 ## Grading Rubric
 
 I am looking for five key things in this assignment:
