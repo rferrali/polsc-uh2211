@@ -727,24 +727,37 @@ $$
 
 ## Using fixed effects in difference-in-differences
 
-Back to our difference-in-differences regression, now with a unit fixed effect per respondent:
+Back to our difference-in-differences regression. We were working with:
+
+$$
+y_{it} = \alpha + \beta_1 \cdot \text{post}_t + \beta_2 \cdot (\text{treated}_i \times \text{post}_t) + \beta_3 \cdot \text{treat}_i + \varepsilon_{it}
+$$
+
+This boils down to two regressions:
+
+- Control group: $y_{it} = \underbrace{(\alpha)}_{\alpha_{\text{control}}} + \beta_1 \cdot \text{post}_t + \varepsilon_{it}$
+- Treated group: $y_{it} = \underbrace{(\alpha + \beta_2)}_{\alpha_{\text{treatment}}} + (\beta_1 + \beta_3) \cdot \text{post}_t + \varepsilon_{it}$
+
+. . .
+
+Instead, we can give each respondent their own intercept and compare them to themselves over time:
+
+- Control group: $y_{it} = \underbrace{\alpha_i}_{\alpha_{\text{control}, i}} + \beta_1 \cdot \text{post}_t + \varepsilon_{it}$
+- Treated group: $y_{it} = \underbrace{(\alpha_i)}_{\alpha_{\text{treatment}, i}} + (\beta_1 + \beta_3) \cdot \text{post}_t + \varepsilon_{it}$
+
+Together:
 
 $$
 y_{it} = \alpha_i + \beta_1 \cdot \text{post}_t + \beta_2 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}
 $$
 
-- $\alpha_i$: person $i$'s own intercept (their unit fixed effect).
-- $\text{post}_t$: 1 if observation is from the post period, 0 otherwise.
-- $\text{treated}_i \times \text{post}_t$: 1 if person $i$ is treated *and* we're in the post period.
-- $\beta_2$: the difference-in-differences.
-
 . . .
 
 Notice what's *missing*: the standalone `treated` term. It's already absorbed by $\alpha_i$, because `treated` doesn't change over time for a given person — it's just one of their stable characteristics. The fixed effect has already done that work.
 
-## The within-person view
+## The within-group view
 
-Another way to think about it: for each person, subtract their own average from their outcome.
+Another way to think about it: for each group (here, a person), subtract their own average from their outcome.
 
 ```{r}
 #| label: toy-within
@@ -762,7 +775,7 @@ Running `lm(opinion_demeaned ~ post_demeaned)` on the demeaned data gives *exact
 
 . . .
 
-In words: unit fixed effects throw away all the *between-person* variation and use only the *within-person* movement to estimate the treatment effect. Any stable personal characteristic gets subtracted out in the demeaning step and cannot bias the treatment coefficient.
+In words: unit fixed effects throw away all the *between-group* variation and use only the *within-group* movement to estimate the treatment effect. Any stable personal characteristic gets subtracted out in the demeaning step and cannot bias the treatment coefficient.
 
 ## Let's double check
 
@@ -841,7 +854,7 @@ Time fixed effects absorb anything that hit *everyone* at the same moment — an
 With more waves, we'd want one dummy per wave:
 
 $$
-y_{it} = \alpha_i + \gamma_t + \beta \cdot T_{it} + \varepsilon_{it}
+y_{it} = \alpha_i + \alpha_t + \beta \cdot T_{it} + \varepsilon_{it}
 $$
 
 - $\alpha_i$: unit fixed effect (person's own intercept).
@@ -913,3 +926,5 @@ With staggered treatment there are subtleties we won't cover in this course — 
 - **Time fixed effects** generalize the `post` dummy to many periods and absorb anything that hit everyone at the same moment.
 - **Two-way fixed effects** = unit + time fixed effects. In the simple 2 × 2 case, it's the same number as the interaction regression, but it scales.
 - **Parallel trends** remains the crucial, untestable assumption behind all of these.
+- **Even without parallel trends, fixed effects are a good idea.** You make comparisons within groups that are more similar (different years within the same person, different cities within the same region, ...), so even if we can't claim causality, we can get a cleaner estimate of the association between treatment and outcome.
+- **Final project.** Typically, you run a very simple regression (`outcome ~ treatment`), then add fixed effects (`outcome ~ treatment | id, region, ...`), then add controls (`outcome ~ treatment + controls | id, region, ...`) and compare results.

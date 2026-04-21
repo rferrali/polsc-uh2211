@@ -62,8 +62,8 @@ variable indicating whether respondents recalled any news event, (2)
 whether respondents used the internet at all, and whether they used the
 internet for news. In all cases, we found no evidence that the increase
 in approval was significantly larger among heavy consumers of political
-news (see <a href="#tbl-regression" class="quarto-xref">Table 1</a> for
-details).
+news (see Appendix
+<a href="#tbl-regression" class="quarto-xref">Table 1</a> for details).
 
 ## Appendix
 
