@@ -1,102 +1,361 @@
-# Example Practicum
-Romain Ferrali
+# Approaching the practicum
+Romain Ferrali & Paul Love
 
-> This is a partial response to the practicum assignment, meant to
-> illustrate how to approach the assignment and how to write up your
-> results. It is not a complete response, but is meant to illustrate how
-> to approach describing data and results clearly, accurately, and in a
-> way that is both accessible to a non-technical audience, yet satisfies
-> more technical readers.
+This document has two parts. The first is general advice on how to
+approach an open-ended data analysis like the practicum: how to
+structure the report, how to write for a non-technical audience, how to
+translate hypotheses into regressions, how to think about figures, and
+how to be honest about what your data can and cannot establish. The
+second is a worked example using the practicum data on the Crimea
+annexation, showing what these recommendations look like in practice.
+The example is partial — it only chases a handful of the hypotheses you
+might explore — but it should give you a clear sense of the writing
+style we are looking for.
 
-Following the annexation of Crimea in Februrary 2014, Vladimir Putin’s
+# How to approach the analysis
+
+## Tell a story with data
+
+The hardest part of the practicum is not the statistics. It is the
+writing — and specifically, writing in a way that a non-statistical
+reader will follow and find interesting. A useful benchmark to keep in
+mind is your mother (or anyone close to you who does not have a
+quantitative background). She is intelligent and curious, but she does
+not know what a regression coefficient is, she does not care about
+R-squared values, and she will close the document at the first paragraph
+that bores her. Your job is to tell her a story using data.
+
+A story has a fact to be explained, candidate explanations, evidence
+weighed against those explanations, and a conclusion that is honest
+about what we have learned and what we have not. That is the arc your
+report should follow. Tables and regressions are tools that serve the
+story; they are not the story.
+
+A second benchmark: dense and short beats long and fluffy. The minimum
+length for the practicum is about three pages, but you should not pad.
+If you can make the case in three pages, do not stretch it to five.
+Every sentence should earn its place.
+
+## Structure the report
+
+A useful structure for the body of the report:
+
+- **Open with the fact you are trying to explain, and quantify it.**
+  “Putin’s approval rose after the Crimea annexation” is fine; “Putin
+  gained about 10 percentage points in a couple of months” is much
+  better. If you have the numbers, use them in the very first paragraph.
+  Mentioning the data source in the same sentence buys you credibility
+  for free.
+
+- **Introduce a hypothesis with a transition paragraph.** State the
+  hypothesis. Acknowledge that the available measures are imperfect
+  (rarely does a survey ask the exact question you wish it had asked).
+  Explain how you are operationalizing the idea with the variables you
+  actually have. This single paragraph turns a popular claim into
+  something testable, and it does so without slowing the reader down.
+
+- **Use an “at first sight… but on closer look…” arc when results
+  require nuance.** Start with the visible pattern in the raw data —
+  what the eye picks up. Then explain why that pattern alone is not the
+  whole story (because the difference is not statistically significant,
+  because controls erase it, because a different proxy gives a different
+  answer). End with what we should conclude given everything together.
+
+- **Push technical detail to an appendix.** Variable names from the
+  codebook, the full regression tables, the boring specifications — none
+  of this belongs in the main text. The main text should describe the
+  patterns in plain language. The appendix is where the technically
+  inclined reader can look up the specifications.
+
+## Translate hypotheses into regressions
+
+A useful trick: each hypothesis implies a comparison, and each
+comparison maps cleanly to a regression.
+
+The hypothesis “people who consume more news rallied to Putin more after
+the annexation” is not the same as “people who consume more news approve
+of Putin more.” The first implies a particular comparison: the *change*
+in approval after annexation should be larger among heavier news
+consumers than among lighter news consumers. The natural regression is
+`approval ~ after * news_consumption`, where the interaction term
+captures exactly that differential change. A simple comparison of
+approval levels by news consumption (without the interaction) would not
+test the rally hypothesis at all — it would just describe a baseline
+correlation.
+
+Before you start coding, write down each hypothesis you plan to test,
+sketch the comparison it implies, and pick the regression specification
+accordingly. If two hypotheses imply the same regression, consider
+whether you can really tell them apart from the data.
+
+## Interpret regressions for a non-technical reader
+
+Try to write the body of the report without ever using the word
+“regression.” It is harder than it sounds, and the discipline is good
+for you. When you would otherwise say “we ran a regression with
+controls,” say something like:
+
+> We compared individuals before and after the annexation who not only
+> had the same level of news consumption, but also the same age, gender,
+> and education level. This makes for more pointed comparisons and
+> improves the precision of our estimates. With these adjustments, we
+> still find…
+
+Two things happen at once: you have explained what controls are, and you
+have motivated *why* you are adding them, all without invoking jargon.
+The technical reader knows what you mean. The non-technical reader has
+learned something.
+
+The same trick works for confidence intervals (“the difference, while
+large in size, is small enough that it could have arisen by chance”),
+for fixed effects (“we compared each respondent to themselves over
+time”), and for interactions (“we asked whether the change in approval
+after annexation was larger for some groups than for others”). Make a
+habit of translating before you write.
+
+## Keep controls consistent across specifications
+
+When you present several regressions side by side — typically a base
+specification, then the same specification with controls — keep the
+*same* set of controls in every column where controls appear. Do not add
+age in one column, age and gender in another, and age and education in a
+third. Cherry-picking control sets is a way to make a coefficient look
+significant; it is also a tell that something is fishy. If you have
+decided that age, gender, and education are reasonable controls, use
+exactly those three throughout.
+
+The same logic applies across hypotheses. If you control for age,
+gender, and education when testing the news-watching hypothesis, use the
+same three controls when you test the resentment hypothesis. Consistency
+makes the comparison across specifications meaningful.
+
+## Make your figures earn their place
+
+Figures should make one point each, and they should make it visible to a
+reader who has not read your text yet. A few practical rules drawn from
+the way professional figures are built:
+
+- **Show the raw data, not just the trend line.** Your reader
+  understands points and averages. They do not necessarily understand
+  what a fitted line means. If you only show the line, you have hidden
+  the evidence behind it. If you must show only one thing, show the
+  points; if you can show both, do.
+
+- **Add confidence intervals when comparing means.** They tell the
+  reader, at a glance, whether the difference she sees is real or could
+  plausibly have arisen by chance. Without them, it is on her to guess.
+
+- **Axis breaks should respect the data.** If the variable on the x-axis
+  is “number of news events recalled,” it takes integer values. Tick
+  marks at 2.5 do not make sense. Use breaks at 0, 2, 4, … so the eye
+  lands on points that exist.
+
+- **Y-axis range should let the reader verify your claims.** If your
+  text says “approval hovered around 90%,” there had better be a tick
+  mark at 90% so the reader can check. If your text says approval is
+  between 0 and 100%, set the limits to 0 and 100% — do not let ggplot
+  crop in to make the difference look bigger than it is.
+
+- **Captions are long and descriptive.** A figure caption is the
+  figure’s title; treat it that way. Spell out what the points
+  represent, what the lines represent, and what the reader should look
+  for. Distinguish raw data from fitted lines explicitly.
+
+- **Use a legend instead of an axis when it is cleaner.** “Before
+  annexation” and “After annexation” do not need to be the x-axis labels
+  of two separate panels. A single panel with a color legend at the
+  bottom often reads better.
+
+## Be honest about causality
+
+A standing reflex when reading a report is to interpret what you see as
+causal. We almost cannot help it. As the author, your job is to make
+explicit when a finding *is* causal, when it is merely a description of
+what happened, and when it is somewhere in between.
+
+For every claim, name the treatment and the outcome. In the practicum,
+the natural treatment is “the annexation” and the outcome is “approval
+of Putin.” Then ask: do we have a control group? In the practicum, the
+answer is no — everyone in Russia was exposed to the same news cycle.
+The headline finding (“approval rose after annexation”) is therefore a
+description of what happened in Russia between January and May 2014. It
+is not, strictly speaking, the causal effect of the annexation, because
+we cannot rule out that some other event in those months also moved
+approval.
+
+When you compare *subgroups* (heavy news consumers vs. light ones,
+people who dislike the West vs. people who do not), you are doing what
+is sometimes called subgroup analysis or heterogeneous treatment effects
+analysis. This can be very informative — but it does not rescue
+causality. It just tells you whether some kinds of people moved more
+than others.
+
+There is one more subtle trap worth flagging: the difference between a
+moderator and a mediator.
+
+- A **moderator** is a stable, pre-existing trait of the respondent that
+  you think shapes how they respond to treatment. A respondent’s vote in
+  the 2012 presidential election is a moderator: they cast it years
+  before the annexation, and a question asked in 2014 is just a
+  retrospective measure of something that already happened.
+- A **mediator** is something the treatment itself changes, which then
+  affects the outcome. If the war made some respondents angrier at the
+  West, and that anger is what boosted Putin’s approval, then “anger at
+  the West” is a mediator on the causal path from treatment to outcome.
+
+The trouble is that a variable measured *after* treatment can easily be
+a mediator dressed up as a moderator. If you measure “disapproval of the
+United States” in May 2014 — after the annexation — you cannot tell
+whether disapproval predates the war (and shapes the response to it) or
+whether the war boosted disapproval (and disapproval boosted approval of
+Putin). In the practicum data, only a couple of variables (such as the
+2012 vote) are unambiguously pre-treatment; most of the candidate
+moderators were measured after annexation and could be either moderators
+or mediators. The cleanest fix would be panel data — surveying the same
+respondents before and after the annexation — but the practicum does not
+provide that. Acknowledge the limitation explicitly.
+
+## Acknowledge the limitations
+
+A short paragraph near the end of the report should name the limitations
+of your analysis. Two recurring kinds:
+
+- **Measurement error.** Almost every variable in a survey is a proxy
+  for something we actually want to measure. The practicum has no direct
+  question about TV watching, even though the propaganda hypothesis is
+  fundamentally about TV. We use internet usage and political-news
+  recall as imperfect substitutes — but internet propaganda is not the
+  same as television propaganda, and being able to recall recent news
+  events is not the same as consuming them. State the gap honestly.
+
+- **Missing data.** Respondents skip questions, and the people who skip
+  are often systematically different from the people who answer.
+  Recoding missing values explicitly (rather than silently dropping
+  them) lets you check whether non-respondents look different from
+  respondents on the variables you do observe. The practicum data has
+  missingness in several places; it is worth checking.
+
+Acknowledging these things does not weaken your report; it strengthens
+it. A reader who feels you are being straight with them will trust the
+rest of what you say.
+
+# A worked example
+
+What follows is a partial response to the practicum, written in the
+voice we are recommending you use. It chases only one of the hypotheses
+suggested in the assignment — the idea that heavier news consumers
+rallied more to Putin — but it should give you a feel for how the pieces
+fit together.
+
+------------------------------------------------------------------------
+
+Following the annexation of Crimea in February 2014, Vladimir Putin’s
 approval ratings soared. The Levada Center, a respected and reliable
 polling institution in Russia, conducts regular public opinion polls on
 large (about 1,600 respondents), representative samples of the Russian
-population. In their January 2014 survey, Putin’s approval rating was
-67.7%, while in their May 2014 survey, it increased to 86.1%, an
-important and statistically significant increase.
+population. In their January 2014 survey, Putin’s approval rating stood
+at 67.7%; in their May 2014 survey, it had risen to 86.1%, an increase
+of roughly ten percentage points in only four months.
+<a href="#fig-overall" class="quarto-xref">Figure 1</a> makes the jump
+visible.
 
-Some have argued that the annexation of Crimea boosted Putin’s approval
-ratings because of the Russian state propaganda machine, mostly through
-television. While the Levada Center surveys do not measure TV
-consumption directly, several questions featured in the survey allow
-evaluating the claim, albeit imperfectly. In particular, the survey asks
-respondents how many recent news events they can recall, which can be
-used as a proxy for news consumption. If the propaganda machine was
-responsible for the increase in approval, we would expect that people
-who consume more news would show larger increases in approval following
-the annexation of Crimea.
+<div id="fig-overall">
 
-<a href="#fig-news-consumption" class="quarto-xref">Figure 1</a> below
-shows that after the war, respondents all had a level of approval
-hovering around 90%, regardless of how many news events they recalled.
-In contrast, before the war, there was a clear negative relationship
-between news consumption and approval: people who recalled more news
-events were more likely to disapprove of Putin. This, in turn, implies
-that respondents who consumed more news saw their approval increase more
-than respondents less exposed to political news. At first sight, the
-pattern would thus support our hypothesis: after the annexation, the
-propaganda machine disproportionately garnered the support of heavy
-consumers of political news.
+![](practicum-example_files/figure-commonmark/fig-overall-1.png)
+
+Figure 1: Putin’s approval rating before and after the Crimea
+annexation. Points show the average rating in each Levada Center wave;
+vertical bars show 95% confidence intervals.
+
+</div>
+
+One popular explanation for why the annexation lifted Putin’s standing
+attributes the rise to the Russian state propaganda machine,
+particularly television: the constant favorable coverage of the
+annexation supposedly converted neutral Russians into supporters. We
+test that hypothesis here.
+
+## Was the rally driven by exposure to news?
+
+The Levada surveys do not measure television consumption directly, but
+several survey items allow us to evaluate the propaganda claim, albeit
+imperfectly. In particular, the survey asks respondents how many recent
+news events they can recall, which we use as a proxy for engagement with
+political news. If the propaganda machine was responsible for the rise
+in approval, we would expect those who consume more news to show larger
+increases in approval after the annexation.
+
+<a href="#fig-news-consumption" class="quarto-xref">Figure 2</a> shows
+that after the war, respondents had a level of approval hovering around
+90%, regardless of how many news events they recalled. Before the war,
+by contrast, there was a clear negative relationship between news recall
+and approval: people who remembered more news events were more likely to
+disapprove of Putin. This implies that the people most exposed to news
+saw the largest jump in approval after annexation. At first sight, the
+pattern supports the propaganda hypothesis: those most exposed to
+political coverage rallied the most.
 
 <div id="fig-news-consumption">
 
 ![](practicum-example_files/figure-commonmark/fig-news-consumption-1.png)
 
-Figure 1: Approval ratings by news consumption before and after the
-annexation of Crimea. Points and thin lines represent raw data averages,
-while thick lines represent linear trends.
+Figure 2: Putin’s approval before and after the Crimea annexation, by
+the number of recent news events the respondent could recall. Points and
+thin lines show raw averages; thick lines show linear trends within each
+wave.
 
 </div>
 
-Yet, the insight does not withstand further scrutiny. First, while
-important, the observed differential increase in approval is not
-statistically significant at conventional levels. Second, we used
-regression analysis to make more pointed comparisons and thus improve
-the precision of our estimates. Comparing individuals before and after
-the annexation that shared not only the same level of news consumption,
-but also the same gender, age, and education level, we still find that
-the observed differential increase is not statistically significant. We
-also examined other proxies for news consumption, including (1) a binary
-variable indicating whether respondents recalled any news event, (2)
-whether respondents used the internet at all, and whether they used the
-internet for news. In all cases, we found no evidence that the increase
-in approval was significantly larger among heavy consumers of political
-news (see Appendix
-<a href="#tbl-regression" class="quarto-xref">Table 1</a> for details).
+The insight does not withstand further scrutiny. While the differential
+increase visible in
+<a href="#fig-news-consumption" class="quarto-xref">Figure 2</a> looks
+substantial, it is not statistically significant — that is, it is small
+enough that we cannot rule out chance as the explanation. To make a more
+pointed comparison, we compared individuals before and after the
+annexation who shared not only the same level of news recall but also
+the same gender, age, and education level. Even with these adjustments,
+the differential increase remains statistically indistinguishable from
+zero. We checked several other proxies for news exposure — whether the
+respondent recalled any news event at all, whether they used the
+internet, and whether they used the internet for news — and reached the
+same conclusion in each case. None of these comparisons offers
+convincing evidence that heavy news consumers rallied more than light
+news consumers (see <a href="#tbl-news" class="quarto-xref">Table 1</a>
+in the appendix).
 
 ## Appendix
 
-<div id="tbl-regression">
+<div id="tbl-news">
 
-Table 1: Regression results for the relationship between news
-consumption and approval ratings before and after the annexation of
-Crimea. Controls include age, gender, and education level. The Yes
-category for the interaction term indicates that the respondent recalled
-at least one news event, used the internet, or used the internet for
-news, depending on the model.
+Table 1: Linear regressions of Putin approval on the interaction between
+an after-annexation indicator and various proxies for news consumption.
+Controls include age, gender, and education level. The ‘Yes’ rows
+correspond, respectively, to recalling at least one news event,
+recalling more news events (count), using the internet, and using the
+internet for news. None of the after-by-news interactions is
+statistically significant at conventional levels.
 
 <div class="cell-output-display">
 
 <table class="cell" style="width:94%;">
 <colgroup>
-<col style="width: 12%" />
+<col style="width: 11%" />
 <col style="width: 10%" />
 <col style="width: 10%" />
 <col style="width: 10%" />
 <col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
+<col style="width: 9%" />
+<col style="width: 9%" />
 <col style="width: 10%" />
 <col style="width: 10%" />
 </colgroup>
 <thead>
 <tr>
 <th></th>
-<th colspan="2">Remembers (count)</th>
-<th colspan="2">Remembers (binary)</th>
-<th colspan="2">Internet</th>
-<th colspan="2">Internet for news</th>
+<th colspan="2">Recalls news (binary)</th>
+<th colspan="2">Recalls news (count)</th>
+<th colspan="2">Uses internet</th>
+<th colspan="2">Uses internet for news</th>
 </tr>
 <tr>
 <th></th>
@@ -129,69 +388,69 @@ news, depending on the model.
 <tbody>
 <tr>
 <td>After</td>
+<td>0.167***</td>
 <td>0.171***</td>
+<td>0.157***</td>
 <td>0.159***</td>
 <td>0.204***</td>
 <td>0.206***</td>
 <td>0.181***</td>
 <td>0.180***</td>
-<td>0.167***</td>
-<td>0.157***</td>
 </tr>
 <tr>
 <td></td>
+<td>(0.036)</td>
 <td>(0.035)</td>
 <td>(0.023)</td>
-<td>(0.025)</td>
-<td>(0.025)</td>
-<td>(0.018)</td>
-<td>(0.018)</td>
-<td>(0.036)</td>
 <td>(0.023)</td>
+<td>(0.025)</td>
+<td>(0.025)</td>
+<td>(0.018)</td>
+<td>(0.018)</td>
 </tr>
 <tr>
 <td>Yes</td>
+<td>0.003</td>
 <td>0.008</td>
+<td>-0.009</td>
 <td>-0.007</td>
 <td>0.035</td>
 <td>0.051*</td>
 <td>-0.005</td>
 <td>-0.002</td>
-<td>0.003</td>
-<td>-0.009</td>
 </tr>
 <tr>
 <td></td>
 <td>(0.024)</td>
+<td>(0.024)</td>
+<td>(0.009)</td>
 <td>(0.009)</td>
 <td>(0.022)</td>
 <td>(0.025)</td>
 <td>(0.023)</td>
 <td>(0.023)</td>
-<td>(0.024)</td>
-<td>(0.009)</td>
 </tr>
 <tr>
 <td>After x Yes</td>
+<td>0.018</td>
 <td>0.013</td>
+<td>0.015</td>
 <td>0.013</td>
 <td>-0.032</td>
 <td>-0.037</td>
 <td>0.009</td>
 <td>0.009</td>
-<td>0.018</td>
-<td>0.015</td>
 </tr>
 <tr>
 <td></td>
 <td>(0.039)</td>
+<td>(0.039)</td>
+<td>(0.010)</td>
 <td>(0.010)</td>
 <td>(0.031)</td>
 <td>(0.031)</td>
 <td>(0.032)</td>
 <td>(0.031)</td>
-<td>(0.039)</td>
-<td>(0.010)</td>
 </tr>
 <tr>
 <td>Num.Obs.</td>
@@ -206,14 +465,14 @@ news, depending on the model.
 </tr>
 <tr>
 <td>R2</td>
+<td>0.047</td>
 <td>0.059</td>
+<td>0.048</td>
 <td>0.060</td>
 <td>0.048</td>
 <td>0.061</td>
 <td>0.047</td>
 <td>0.059</td>
-<td>0.047</td>
-<td>0.048</td>
 </tr>
 <tr>
 <td>Controls</td>

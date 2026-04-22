@@ -1,398 +1,33 @@
 ---
 title: "Lecture 20-21: Time series"
-format: revealjs
 ---
 
 ```{r}
 #| label: setup
 library(tidyverse)
-library(haven)
 library(modelsummary)
 library(fixest)
-
-df <- bind_rows(
-  read_dta("./data/practicum-jan-2014.dta") |> mutate(after = 0),
-  read_dta("./data/practicum-may-2014.dta") |> mutate(after = 1)
-) |>
-  # data cleaning
-  mutate(
-    approval = putinapprov,
-    int_yes = 1 - int_nono,
-    us_disapprov = 1 - usapprov,
-    eu_disapprov = 1 - euapprov,
-    ukraine_disapprov = 1 - ukrapprov
-  )
 ```
 
-Time series data is data with a time element. We also call this dynamic data (vs. static/cross-section data). Can be: 
+So far in this course we have mostly worked with *static* data: a single snapshot of a population, where each row is one unit and time does not enter the picture. Most of the questions political scientists actually care about, though, have a time element. Did approval go up after an event? Did a policy reform change behavior? How long does an effect last? To answer these we need data with a time dimension — what statisticians call **dynamic** data, and what we will more loosely call **time-series** data.
 
-- Panel data (units you follow over time; e.g., survey the same people every year, or track the same countries' GDP every year)
-- Repeated cross-section data (multiple units observed at multiple time points, but not the same units each time; e.g., practicum data)
+Two flavors are worth distinguishing. **Panel data** follow the same units repeatedly: you survey the same individuals every year, or track the same countries' GDP every year. **Repeated cross-section** data observe multiple units at multiple time points, but not the same units at each point: every wave of the survey draws a fresh sample. The practicum data are repeated cross-sections — the Levada Center surveyed about 1,600 Russians in January 2014 and a different 1,600 Russians in May 2014. The Danish data we will use today are panel: the same Danes were surveyed across five waves.
 
+Time-series data buy us several things at once. They let us **forecast** — what will turnout look like next year? They let us **measure the importance of events** — how did the 2008 financial crisis change consumer confidence? They let us study **treatment effect dynamics** — does a policy effect last, or does it fade after a year? And, most importantly for this lecture, they let us **estimate causal effects when treatment is not randomly assigned**. Real-world treatments are almost never randomized: governments, companies, and parties make decisions for reasons, and their decisions are correlated with everything else going on at the time. Time-series data give us a way to claw back some causal leverage even without randomization.
 
-## Uses of time-series data
+## A quick recap of where the practicum left us
 
-- Forecasting (in class: find examples of things useful to forecast)
-- Improve causal inference: 
-  - Understand the importance of events (e.g. how did the 2008 financial crisis affect the economy?)
-  - Understand treatment effect dynamics (e.g. how long does a policy's effect last?)
-  - Estimate causal effects even when treatment is not randomly assigned
+The practicum took us through the rally around Putin after the Crimea annexation. Approval rose by roughly ten percentage points in four months, and we tested several explanations by interacting an `after` indicator with respondent characteristics: news consumption, disapproval of the West, nationalist sympathies. We found suggestive evidence for some of these explanations and not for others (see the [worked example](../homework/practicum-example.qmd)).
 
-## Analyzing repeated cross-section data: the practicum case
+What the practicum did *not* let us do was claim a causal effect of the annexation itself. Two reasons. First, there is no control group: every Russian was exposed to the same news cycle, so we cannot rule out that some other event in those same four months also moved approval. Second, almost all of the candidate moderators (resentment, hostility to the United States, recent news exposure) were measured *after* the annexation, which means they could be mediators rather than moderators — variables that the war itself changed, rather than stable traits that shaped how respondents reacted to it.
 
-Eight years before the Russian full-scale invasion into Ukraine, on February 27th of 2014, Vladimir Putin illegally annexed the Ukrainian peninsula of Crimea. His approval ratings soared. 
+Both problems would dissolve if we had **panel data with a clear control group** — the same respondents observed before and after, with some of them affected by the event and others not. That is exactly the setup we will work with for the rest of this lecture.
 
-Why did the annexation of Crimea boost his approval? 
+## A new running example: Denmark, 2010–2011
 
-- One argument is that the Russian state propaganda machine, mostly through television, was an important factor. 
-- Another argument is that resentment toward the West, and in particular Western sanctions against Russia, led people to view Crimea's annexation as a blow against their oppressors. 
-- Yet others argue that it was mere territorial expansion that made people approve of Putin. 
+We leave Crimea and move to Denmark in 2010–2011. The setup is admirably clean. In late 2011 the Danish **Liberal Party** (*Venstre*, "V") suddenly reversed its long-standing position on two welfare policies: it called for halving the maximum unemployment benefits period from four years to two, and for abolishing the early-retirement pension (*efterløn*). The **Danish People's Party** (*Dansk Folkeparti*, "DF") backed the Liberals on unemployment benefits. Other Danish parties did not change their positions. While this debate was unfolding, a five-wave panel survey happened to be in the field — the same 2,902 respondents, surveyed five times in close succession, bracketing the position switch (Slothuus & Bisgaard 2021, *American Journal of Political Science*).
 
-## Battle plan
-
-- One argument is that the Russian state propaganda machine, mostly through television, was an important factor. 
-  - We can test this by looking at whether people who watch more news increase their approval more after annexation.
-- Another argument is that resentment toward the West, and in particular Western sanctions against Russia, led people to view Crimea's annexation as a blow against their oppressors. 
-  - We can test this by looking at whether people who are more resentful of the West increase their approval more after annexation.
-- Yet others argue that it was mere territorial expansion that made people approve of Putin. 
-  - We can test this by looking at whether people who are more nationalistic increase their approval more after annexation.
-
-# Establishing the baseline: did approval increase?
-
-# Simple visualization
-
-```{r}
-#| label: approval-plot simple
-df |>
-  group_by(after) |>
-  summarize(approval = mean(approval, na.rm = T)) |>
-  ggplot(aes(x = after, y = approval)) +
-  geom_point() +
-  geom_line() +
-  scale_x_continuous(breaks = c(0, 1), labels = c("Before", "After")) +
-  labs(
-    x = "Time",
-    y = "Mean approval",
-    title = "Putin's approval before and after Crimea annexation"
-  ) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
-  theme_minimal()
-```
-
-## With regression
-
-$y_{it}$, Putin's approval rating for individual $i$ at time $t \in \{\text{before} = 0, \text{after} = 1\}$. 
-
-$$
-y_{it} = \alpha + \beta \cdot t + \epsilon_{it}
-$$
-
-. . .
-
-- $\alpha$ is the mean approval before annexation (when $t=0$).
-- $\alpha + \beta$ is the mean approval after annexation (when $t=1$).
-- $\beta$ is the change in approval after annexation (when $t=1$). This is the key parameter of interest: if $\beta > 0$, then approval increased after annexation.
-
-```{r}
-#| label: approval-reg simple
-lm(approval ~ after, data = df) |>
-  modelsummary(
-    stars = TRUE,
-    coef_rename = c("after" = "After annexation"),
-    gof_map = c("nobs", "r.squared")
-  )
-```
-
-## Visualizing the regression results
-
-```{r}
-#| label: approval-plot
-lm(approval ~ after, data = df) |>
-  broom::augment(
-    newdata = tibble(after = c(0, 1)),
-    interval = "confidence"
-  ) |>
-  ggplot(aes(x = after, y = .fitted, ymin = .lower, ymax = .upper)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(), width = 0.1) +
-  scale_x_continuous(breaks = c(0, 1), labels = c("Before", "After")) +
-  labs(
-    x = "Time",
-    y = "Mean approval",
-    title = "Putin's approval before and after Crimea annexation"
-  ) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
-  theme_minimal()
-```
-
-# Testing the resentment hypothesis
-
-## Candidate variables
-
-- `us_disapprov`: disapproval of the United States.
-- `eu_disapprov`: disapproval of the European Union.
-- `dsxnshrm2`: belief that Western sanctions harm ordinary people in Russia. -> only asked in one wave, so we can't use it.
-
-## Simple visualization
-
-```{r}
-#| label: approval-plot resentment
-df |>
-  group_by(after, us_disapprov) |>
-  summarize(approval = mean(approval, na.rm = T)) |>
-  mutate(us_disapprov = ifelse(us_disapprov == 1, "Yes", "No")) |>
-  ggplot(aes(
-    x = after,
-    y = approval,
-    color = us_disapprov,
-    group = us_disapprov
-  )) +
-  geom_point() +
-  geom_line() +
-  scale_x_continuous(breaks = c(0, 1), labels = c("Before", "After")) +
-  labs(
-    x = "Time",
-    y = "Mean approval",
-    title = "Putin's approval before and after Crimea annexation"
-  ) +
-  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
-  theme_minimal()
-```
-
-## With regression
-
-$y_{it}$, Putin's approval rating for individual $i$ at time $t \in \{\text{before} = 0, \text{after} = 1\}$.
-
-$x_{it}$, whether individual $i$ disapproves of the United States at time $t$.
-
-$$
-y_{it} = \alpha + \beta_1 t + \beta_2 x_{it} + \beta_3 t x_{it} + \epsilon_{it}
-$$
-
-. . .
-
-- $\alpha$: approves of US, before.
-- $\alpha + \beta_1$: approves of US, after.
-- $\alpha + \beta_2$: disapproves of US, before.
-- $\alpha + \beta_1 + \beta_2 + \beta_3$: disapproves of US, after.
-- $\beta_1$: change in approval after annexation for those who approve of the US.
-- $\beta_1 + \beta_3$: change in approval after annexation for those who disapprove of the US.
-- $\beta_3$: extra change in approval after annexation for those who disapprove of the US.
-- If $\beta_3 > 0$, resentful respondents rallied more around Putin than non-resentful respondents after annexation.
-
-. . .
-
-```{r}
-#| label: approval-reg resentment
-lm(approval ~ after * us_disapprov, data = df) |>
-  modelsummary(
-    stars = TRUE,
-    coef_rename = c(
-      "after" = "After annexation",
-      "us_disapprov" = "Disapproves of US"
-    ),
-    gof_map = c("nobs", "r.squared")
-  )
-```
-
-## Robustness (1): adding controls
-
-```{r}
-#| label: approval-reg resentment controls
-list(
-  lm(approval ~ after, data = df),
-  lm(approval ~ after * us_disapprov, data = df),
-  lm(approval ~ after * us_disapprov + age + female + educ, data = df)
-  # add regression with us_disapprov having explicitly coded NAs + controls
-) |>
-  modelsummary(
-    stars = TRUE,
-    coef_rename = c(
-      "after" = "After annexation",
-      "us_disapprov" = "Disapproves of US",
-      "age" = "Age",
-      "female" = "Female",
-      "educ" = "Education"
-    ),
-    gof_map = c("nobs", "r.squared")
-  )
-```
-
-## Robustness (2): scaling up
-
-```{r}
-#| label: robustness resentment
-list(
-  lm(approval ~ after * us_disapprov, data = df),
-  lm(approval ~ after * us_disapprov + age + female + educ, data = df),
-  lm(approval ~ after * eu_disapprov, data = df),
-  lm(approval ~ after * eu_disapprov + age + female + educ, data = df)
-) |>
-  modelsummary(
-    stars = TRUE,
-    coef_map = c(
-      "after" = "After",
-      "us_disapprov" = "Yes",
-      "eu_disapprov" = "Yes",
-      "after:us_disapprov" = "After x Yes",
-      "after:eu_disapprov" = "After x Yes"
-    ),
-    gof_map = c("nobs", "r.squared"),
-    add_rows = matrix(
-      c("Controls", rep(c("No", "Yes"), 2)),
-      nrow = 1
-    ) |>
-      as.data.frame()
-  ) |>
-  tinytable::group_tt(
-    j = list(
-      "Disapproves of US" = 2:3,
-      "Disapproves of EU" = 4:5
-    )
-  )
-```
-
-
-# Other hypotheses
-
-## Candidate variables
-
-
-- News watching:
-  - `int_yes`: has internet (best proxy for news-watching that we have).
-  - `int_news`: watches news on the internet.
-  - `pol_news`: remembers political events in the news.
-  - `pol_news_count`: number of political events in the news that the respondent remembers.
-- Nationalism:
-  - `hyp_ldpr`: would vote for the LDPR (the most nationalist party in Russia).
-  - `vote_zhirin`: voted for Zhirinovsky in 2012 (the most nationalist candidate in the 2012 presidential election).
-
-## News watching hypothesis
-
-```{r}
-#| label: robustness
-list(
-  lm(approval ~ after * int_yes, data = df),
-  lm(approval ~ after * int_yes + age + female + educ, data = df),
-  lm(approval ~ after * int_news, data = df),
-  lm(approval ~ after * int_news + age + female + educ, data = df),
-  lm(approval ~ after * pol_news, data = df),
-  lm(approval ~ after * pol_news_count, data = df),
-  lm(approval ~ after * pol_news + age + female + educ, data = df),
-  lm(approval ~ after * pol_news_count + age + female + educ, data = df)
-) |>
-  modelsummary(
-    stars = TRUE,
-    coef_map = c(
-      "after" = "After",
-      "int_yes" = "Yes",
-      "int_news" = "Yes",
-      "pol_news" = "Yes",
-      "pol_news_count" = "Yes",
-      "after:int_yes" = "After x Yes",
-      "after:int_news" = "After x Yes",
-      "after:pol_news" = "After x Yes",
-      "after:pol_news_count" = "After x Yes"
-    ),
-    gof_map = c("nobs", "r.squared"),
-    add_rows = matrix(
-      c("Controls", rep(c("No", "Yes"), 4)),
-      nrow = 1
-    ) |>
-      as.data.frame()
-  ) |>
-  tinytable::group_tt(
-    j = list(
-      "Internet" = 2:3,
-      "Internet for news" = 4:5,
-      "Remembers pol. evts" = 6:7,
-      "Remembers (count)" = 8:9
-    )
-  )
-```
-
-## Nationalism hypothesis
-
-```{r}
-#| label: robustness territorial
-list(
-  lm(approval ~ after * ukraine_disapprov, data = df),
-  lm(approval ~ after * ukraine_disapprov + age + female + educ, data = df),
-  lm(approval ~ after * hyp_ldpr, data = df),
-  lm(approval ~ after * hyp_ldpr + age + female + educ, data = df),
-  lm(approval ~ after * vote_zhirin, data = df),
-  lm(approval ~ after * vote_zhirin + age + female + educ, data = df)
-) |>
-  modelsummary(
-    stars = TRUE,
-    coef_map = c(
-      "after" = "After",
-      "ukraine_disapprov" = "Yes",
-      "hyp_ldpr" = "Yes",
-      "vote_zhirin" = "Yes",
-      "after:ukraine_disapprov" = "After x Yes",
-      "after:hyp_ldpr" = "After x Yes",
-      "after:vote_zhirin" = "After x Yes"
-    ),
-    gof_map = c("nobs", "r.squared"),
-    add_rows = matrix(
-      c("Controls", rep(c("No", "Yes"), 3)),
-      nrow = 1
-    ) |>
-      as.data.frame()
-  ) |>
-  tinytable::group_tt(
-    j = list(
-      "Disapproves of Ukraine" = 2:3,
-      "Would vote LDPR" = 4:5,
-      "Voted Zhirinovsky 2012" = 6:7
-    )
-  )
-```
-
-# Overall results
-
-- No evidence for the news-watching hypothesis.
-- Mixed evidence for the resentment hypothesis: disapproval of the US seems to be associated with a bigger increase in approval after annexation, but disapproval of the EU does not.
-- Stronger evidence for the nationalism hypothesis: support for the ultranationalist party associated with a bigger increase in approval after annexation.
-
-# Limitations
-
-- Measurement error: our measures of news-watching is imperfect (internet instead of TV)
-- Missing data: we should have checked looked into missingness (e.g. use explicity NAs).
-- Causality
-
-# Causality
-
-## Our treatment: annexation of Crimea.
-
-- What is our control group? None: we don't have a group of people who were not exposed to the annexation. We only have before and after measures for the same population.
-- So we can't establish causality: we can't rule out that some other event that happened around the same time as the annexation caused the increase in approval.
-
-## Moderators: resentment, nationalism, news-watching.
-
-- We measure most of our moderators at the time of the survey, so for the "after" survey, we measure it after the annexation. This means that we can't rule out that the annexation caused an increase in resentment or nationalism, which in turn caused an increase in approval. In other words, we can't rule out that resentment and nationalism are **mediators** rather than **moderators** of the effect of annexation on approval.
-- Only one of our moderators has been measured before annexation (vote for Zhirinovsky)
-- $\Rightarrow$ **panel** data with the same respondents before and after annexation would allow us to measure all moderators before annexation and thus establish causality more convincingly.
-
-# Establishing causality with panel data
-
-## A new running example
-
-We leave Crimea and move to Denmark in 2010–2011.
-
-- In 2011 the Danish **Liberal Party** (*Venstre*, "V") suddenly reversed its long-standing position on two welfare policies:
-  - halving the maximum unemployment benefits period from 4 to 2 years,
-  - abolishing the early-retirement pension (*efterløn*).
-- The **Danish People's Party** (*Dansk Folkeparti*, "DF") supported the Liberals on unemployment benefits.
-- A five-wave panel survey happened to be in the field *right around* these switches (Slothuus & Bisgaard 2021, AJPS).
-
-. . .
-
-Question for us: **did Liberal-leaning voters change their opinions when their party changed its position?**
-
-## The data
+The question this setup lets us ask is unusually pointed: **did Liberal-leaning voters change their opinions when their party changed its position?** The conventional story in political science runs the other way around — parties chase their voters' preferences. The Danish episode lets us look at the rarer reverse path: do voters follow when their party leads?
 
 ```{r}
 #| label: danish-load
@@ -400,24 +35,13 @@ danish <- read_csv("data/lecture-20-21-danish.csv", show_col_types = FALSE)
 danish
 ```
 
-- `respondent_id` — 2,902 unique Danes
-- `wave` — 1 to 5 (five survey waves in 2010–2011)
-- `party` — the respondent's party at wave 1
-- `benefit_cut_support` — 0–1 scale, higher = more support for cutting unemployment benefits
+Each row is one respondent in one wave. The variables we will use are `respondent_id` (one of 2,902 unique Danes), `wave` (1 to 5), `party` (the respondent's party at wave 1, before the switch), and `benefit_cut_support` (a 0–1 scale, higher meaning more support for cutting unemployment benefits).
 
-## Why this is a better setup than Crimea
+This is a much better setup than the Crimea practicum for three reasons. First, the same people are surveyed repeatedly, so we can tell *within-person change* from stable personal differences. Second, there is a clear treatment group (Liberal and Danish People's Party supporters, whose party switched) and a clear control group (everyone else). Third, party affiliation was measured at wave 1, *before* the switch, and the gap between waves is a few months — short enough that party identification barely budges. So we can use a respondent's pre-switch party as a clean group label, free of contamination by treatment. In Crimea, by contrast, every respondent was treated.
 
-- Same people, surveyed repeatedly $\Rightarrow$ we can tell time-varying changes from stable personal characteristics.
-- A treatment group: Liberal and Danish People's Party supporters — their party switched.
-- A control group: supporters of parties that *didn't* switch.
+## A first look at the data
 
-. . .
-
-If Liberal supporters shift toward shorter benefits between two waves, is that enough to claim the party caused the shift? What else could have happened in the meantime?
-
-## A first look
-
-We focus on waves 2 and 3, bracketing the Liberal Party's switch on unemployment benefits. Let's plot the average support for cutting unemployment benefits, separately for treated (Liberal / DPP) and control (other parties) respondents, before and after the switch.
+The Liberal Party announced its switch on unemployment benefits between waves 2 and 3 of the survey. Let us compare those two waves: the average level of support for cutting unemployment benefits, separately for treated respondents (Liberal and DPP supporters) and control respondents (everyone else), before and after the switch.
 
 ```{r}
 #| label: first-look
@@ -448,41 +72,30 @@ danish |>
   theme_minimal()
 ```
 
-## Is this causal?
+The picture is suggestive. Both groups are relatively flat from wave 2 to wave 3 — except that the treated group jumps noticeably while the control group barely moves. The gap between the two lines widens, and it widens between exactly the two waves the party switch happened. If we could trust this widening as the effect of the party switch, we would be done.
 
-- What does the *gap between the two lines* measure at each wave?
-- What does the *change in the gap* from before to after measure?
-- What would have to be true for the widening of the gap to be the causal effect of the Liberal Party's position switch?
+Can we? What does the *gap between the two lines* measure at each point in time? What does the *change in the gap* measure? And what would have to be true for that change in the gap to be the causal effect of the Liberal Party's position switch? Holding those questions for a moment, let us first look at why the more obvious comparisons would not work.
 
+## Two bad comparisons that combine into a good one
 
-# Difference-in-differences
+We want to know what effect the Liberal/DPP position switch had on its supporters' support for the new policy line. There are two obvious comparisons we could make, and both of them, by themselves, are bad.
 
-## Two bad comparisons
+**Bad comparison #1: treated, after vs. treated, before.** Just look at the Liberal/DPP supporters and ask how much their support changed from wave 2 to wave 3. The trouble is that *anything* that happened in those weeks could be responsible for the change — a recession deepening, a news event, a celebrity making the cause fashionable. The pre/post difference confounds the treatment with the secular trend.
 
-We want to know: **what effect did the Liberal and DPP policy position change have on their supporters' support for said policy?**
+**Bad comparison #2: treated, after vs. control, after.** Just look at wave 3 and compare Liberal/DPP supporters to everyone else. The trouble is that the two groups are systematically different to begin with. Right-wing voters are wealthier on average, and wealthier people tend to want lower taxes and lower redistribution; they were more in favor of cutting benefits *before* the switch and would be more in favor of cutting them after, even if no party had moved an inch. The cross-sectional difference confounds the treatment with stable group differences.
 
-. . .
+The clever move is to take the difference of these two bad comparisons. Specifically, we compare:
 
-Two bad comparisons: 
+- the pre-to-post change among **treated** respondents (Liberal + DPP supporters),
+- with the pre-to-post change among **control** respondents (everyone else).
 
-1. Treated group (after) - Treated group (before)
-2. Treated group (after) - Control group (after)
+The control group's pre-to-post change is our best estimate of the **secular trend** — everything that would have moved treated respondents too, even if their party had said nothing. If treated respondents moved *more* than that, the extra movement is what we attribute to the treatment. In the Danish data, control respondents barely moved: their support rose by about one percentage point. Treated respondents rose by something like thirteen percentage points. Subtract one from thirteen, and the *causal effect of the policy switch* on its supporters' support for the policy is something like twelve percentage points — a striking move in only a few weeks.
 
-. . .
+This is the **difference-in-differences** estimator. It is a small algebraic move with a big payoff: by combining two bad comparisons, each of which is confounded in a different way, we strip out the confound and isolate the treatment effect — without needing randomization.
 
-1. Bad because other things could have changed between before and after, besides the party switch. Maybe the economy got worse, or there was a news event that made people more supportive of cutting benefits.
-2. Bad because the treated and control groups are different people, so their support levels could differ for reasons unrelated to the party switch.
+## The 2 × 2 table and the formula
 
-## Combining them makes for a good comparison
-
-We compare:
-
-- the pre-to-post change among **treated** respondents (Liberal + Danish People's supporters)
-- to the pre-to-post change among **control** respondents (everyone else)
-
-**Key takeaway.** We use the control group's pre-to-post change to estimate the "secular trend"/counterfactual — how much treated respondents would have moved too, even without the party switch. Then we see if treated respondents moved *more* than that.
-
-## The 2 × 2 table
+Let us write it out cleanly. The data we are working with is a 2 × 2 table: two groups (treated, control) by two times (pre, post). Four cell means.
 
 ```{r}
 #| label: did-means
@@ -501,23 +114,19 @@ danish_23 |>
   )
 ```
 
-Four numbers — one for each (treated, post) cell.
-
-## The difference-in-differences estimator
-
-Using the four cell means:
+The difference-in-differences estimator is:
 
 $$
 \widehat{\text{DiD}} = \bigl(\bar y_{T,\text{post}} - \bar y_{T,\text{pre}}\bigr) - \bigl(\bar y_{C,\text{post}} - \bar y_{C,\text{pre}}\bigr)
 $$
 
-- First term: how much treated respondents moved.
-- Second term: how much control respondents moved (the "secular trend" — everything that would have happened to treated respondents too, even without the party switch).
-- Difference: the *extra* movement among the treated, attributable to the treatment.
+The first term is how much treated respondents moved. The second is how much control respondents moved — our estimate of what would have happened to treated respondents in the absence of treatment. Their difference is the *extra* movement among the treated, attributable to the treatment.
+
+It is worth pausing on one piece of intuition. The two groups do not need to start at the same level for difference-in-differences to work. Liberal voters were more in favor of cutting benefits than left-wing voters at every wave; that is fine. What matters is whether their *changes* over time would have been similar absent treatment. We will return to this assumption shortly.
 
 ## As a regression
 
-The 2 × 2 difference-in-differences is just a regression with an interaction:
+The 2 × 2 difference-in-differences has a tidy regression representation: just an interaction.
 
 ```{r}
 #| label: did-reg
@@ -528,40 +137,29 @@ lm(benefit_cut_support ~ treated * post, data = danish_23) |>
   )
 ```
 
-- Intercept: control group, before.
-- `treated`: control-vs-treated gap *before* the switch.
-- `post`: pre-to-post change for the control group.
-- `treated:post`: **the difference-in-differences** — extra movement for treated respondents.
+Reading the four coefficients takes a bit of practice. A useful trick: ask "what does setting all the variables to zero correspond to?" Setting `treated = 0` and `post = 0` corresponds to a control respondent at wave 2 — so the **intercept** is the average support for control respondents before the switch.
 
-## The assumption we rely on
+- `treated`: the gap between treated and control respondents *before* the switch — how much more right-wing voters supported cutting benefits at baseline.
+- `post`: the pre-to-post change for the *control* group — our estimate of the secular trend.
+- `treated:post`: the **difference-in-differences** itself — the extra movement in the treated group, on top of the secular trend.
 
-For the difference-in-differences to be the causal effect of the party switch, we need to believe:
+Compare the four cell means above to these four coefficients and you will see they encode exactly the same information.
+
+## The parallel-trends assumption
+
+For the `treated:post` coefficient to be the causal effect of the policy switch, we have to believe one specific thing:
 
 > In the absence of the switch, Liberal/DPP supporters would have moved on this issue by the same amount as supporters of other parties.
 
-. . .
+This is the **parallel-trends assumption**. It says that the time dynamics of the control group are a credible counterfactual for what would have happened to the treated group, had they not been treated.
 
-i.e., the time dynamics of the control group are a credible counterfactual for the time dynamics of the treated group, had they not been treated.
-
-. . .
-
-This is called the **parallel trends assumption**.
-
-. . .
-
-We can't test it directly — it's a counterfactual. But we can look at whether the two groups were moving in parallel *before* the treatment.
-
-## A plausibility check, eyeball test
-
-We have an earlier wave (wave 1) — before wave 2. If parallel trends holds, the treated and control groups should have moved roughly in parallel from wave 1 to wave 2, when nothing special was happening.
+The catch is that we cannot test parallel trends directly. It is a counterfactual: we do not get to see the world in which the Liberal Party did not switch. What we *can* do is check whether the two groups were moving in parallel *before* the switch — if they were, it is at least plausible they would have continued to move in parallel afterwards.
 
 ```{r}
 #| label: pretrend-plot
 danish |>
   filter(!is.na(party), wave <= 3) |>
-  mutate(
-    treated = ifelse(party %in% c("V", "DF"), "Treatment", "Control")
-  ) |>
+  mutate(treated = ifelse(party %in% c("V", "DF"), "Treatment", "Control")) |>
   group_by(treated, wave) |>
   summarize(
     mean_support = mean(benefit_cut_support, na.rm = TRUE)
@@ -575,10 +173,11 @@ danish |>
     y = "Support for cutting unemployment benefits",
     color = NULL,
     title = "Pre-treatment trends"
-  )
+  ) +
+  theme_minimal()
 ```
 
-## A plausibility check, now with regression
+From wave 1 to wave 2 — when nothing in particular was going on — the two groups move pretty much in parallel: a small increase for both, almost identical in size. Then wave 3 happens, and only the treated group jumps. If you wanted to test the wave-1-to-wave-2 parallelism formally, you could run a placebo difference-in-differences between waves 1 and 2:
 
 ```{r}
 #| label: pretrend-reg
@@ -595,46 +194,25 @@ danish |>
   )
 ```
 
-A small, statistically insignificant interaction is reassuring (but not proof). A big one would be a warning sign.
+The interaction is small and statistically insignificant — what we hoped to see. A small, insignificant pre-period interaction is reassuring; a large or significant one would be a warning sign that the two groups were already on different trajectories before treatment.
 
-. . .
+It is worth being honest that this is only ever circumstantial evidence. Trends can be parallel before treatment and diverge after for reasons that have nothing to do with the treatment itself — say, a leadership change inside the Liberal Party that happened to coincide with the policy switch. Such a confound would only affect the treatment group and would be invisible in the pre-period. We cannot rule it out from the data alone; we can only argue, as substantively as possible, that no such confound is plausible.
 
-Classroom discussion: what real-world process could make parallel trends fail here?
+## Unit fixed effects
 
-# Unit fixed effects
+We have a difference-in-differences estimate. But notice something: our regression so far does not actually use the fact that we observe the *same* respondents at wave 2 and wave 3. It treats the data as two independent cross-sections of treated and control respondents. We can do better.
 
-## Using the panel structure
-
-We have a difference-in-differences estimate. But notice: our regression so far doesn't use the fact that we see the *same* respondents at wave 2 and wave 3. We're just treating the data as two independent cross-sections of treated and control respondents.
-
-. . .
-
-Unit fixed effects let us lean on the panel structure directly: we give each respondent their own intercept, which soaks up **everything stable about them** — deep partisanship, personality, childhood, education, …
-
-. . .
-
-That sharpens our design. Let's build it up.
-
-## We already know dummy variables
-
-Back in the regression lectures we added dummies to shift the intercept:
+The key idea is to give each respondent their own intercept. We have already seen, way back in the regression lectures, that adding a dummy variable shifts the intercept for one group:
 
 $$
 y_i = \alpha + \beta_1 \cdot \text{female}_i + \beta_2 x_i + \varepsilon_i
 $$
 
-The dummy `female` adds a constant to women's predicted outcome — essentially, women get their own intercept.
+In this regression, `female` adds a constant to women's predicted outcome — effectively, women get their own intercept. What if we did the same thing, but with one dummy per *individual*?
 
-. . .
+### A tiny toy panel
 
-- Males: $y_i = \underbrace{\alpha}_{\alpha_{\text{male}}} + \beta_2 x_i + \varepsilon_i$
-- Females: $y_i = \underbrace{(\alpha + \beta_1)}_{\alpha_{\text{female}}} + \beta_2 x_i + \varepsilon_i$
-
-. . .
-
-**What if we had one dummy per individual?**
-
-## A tiny toy panel
+Let me make this concrete with four people, observed before and after.
 
 ```{r}
 #| label: toy-panel
@@ -657,12 +235,7 @@ toy <- tribble(
 toy
 ```
 
-Four people, two waves each. Notice:
-
-- Person C starts much higher than person A — stable personal differences.
-- Everyone moves *up* from pre to post — but by different amounts.
-
-## Regression with one dummy per person
+Persons A and B start low; persons C and D start high. Everyone moves up from pre to post, by different amounts. If we run a regression with one dummy per person plus a `post` indicator:
 
 ```{r}
 #| label: toy-fe
@@ -670,94 +243,21 @@ lm(opinion ~ id + post, data = toy) |>
   summary()
 ```
 
-- The coefficients on `idB`, `idC`, `idD` are person-specific intercepts — how much that person's baseline differs from person A's.
-- The coefficient on `post` is the average *within-person* change from pre to post: A went up by 2, B by 2, C by 1, D by 2, so the average is 1.75.
-
-. . .
-
-- Person A: $y_{A,t} = \underbrace{\text{Intercept}}_{\alpha_A} + \beta \cdot \text{post}_t + \varepsilon_{A,t}$
-- Person B: $y_{B,t} = \underbrace{(\text{Intercept} + \text{idB})}_{\alpha_B} + \beta \cdot \text{post}_t + \varepsilon_{B,t}$
-
-. . .
+The dummies on `idB`, `idC`, `idD` are each person's intercept relative to person A. The coefficient on `post` is the *average within-person change* from pre to post: A went up by 2, B by 2, C by 1, D by 2, so the average is 1.75 — exactly what the regression reports. Each person is being compared to themselves.
 
 Those person-specific intercepts are called **unit fixed effects**.
 
-## What unit fixed effects do
+### What unit fixed effects buy us
 
-A unit fixed effect gives each person their own intercept that soaks up **everything stable about them**:
+A unit fixed effect gives every respondent their own intercept that absorbs *everything stable about them*: childhood, personality, baseline partisanship, deep values, education for adults, things we never bothered to measure, things we never thought of. As long as a characteristic does not change over time, it cannot bias the coefficient on a variable that does change over time, because the person's fixed effect has already swallowed it.
 
-- personality, childhood, genetics, permanent income, deep partisanship, upbringing, education (for adults), …
-- anything we can't measure, too.
+Said differently: if I want to estimate the effect of some treatment on an outcome, the cleanest possible comparison is the same person before and after treatment. You cannot get more comparable than that. Unit fixed effects let me do exactly this kind of comparison, except averaged across many people. It is exactly what we could not do in the Crimea practicum: there we never observed the same respondent twice.
 
-. . .
+There is a constraint that comes with this. You cannot include any **time-invariant** variable (like `female`, or birthplace, or year of birth) in a regression that already has unit fixed effects. The fixed effect has already absorbed the effect of being a particular person, which includes the effect of being female, the effect of being from Aarhus, and so on. Trying to estimate the gender effect on top of the unit effect is asking the regression to separate two things that are perfectly collinear — and it cannot.
 
-As long as those characteristics don't change over time, they **cannot bias** the coefficient on a variable that *does* change over time — the person's fixed effect has already absorbed them.
+### The within-group view
 
-. . .
-
-This is exactly what we couldn't do with Crimea: we never saw the same respondent twice.
-
-## The fixed-effects model
-
-- $y_{it}$: $i$'s outcome at time $t$
-- $x_{it}$: $i$'s time-varying characteristics at time $t$ (e.g. news consumption this month, current income)
-- $x_i$: $i$'s time-invariant characteristics (e.g. year of birth, childhood socialization, deep personality traits)
-
-. . .
-
-$$
-y_{it} = \alpha + \beta_1 \text{income}_{it} + \beta_2 \text{female}_i + \beta_3 \text{birthplace}_i + \varepsilon_{it}
-$$
-
-. . .
-
-Fixed effects throw away all the $x_i$ variation by giving each person their own intercept:
-
-$$
-y_{it} = \alpha_i + \beta_1 \text{income}_{it} + \varepsilon_{it}
-$$
-
-. . . 
-
-**Important.** you cannot include any time-invariant variable (e.g. `female`, `birthplace`) in a fixed-effects regression, because their effect is already absorbed by the unit fixed effect. The following regression cannot be estimated:
-
-$$
-y_{it} = \alpha_i + \beta_1 \text{income}_{it} + \beta_2 \text{gender}_i + \varepsilon_{it}
-$$
-
-## Using fixed effects in difference-in-differences
-
-Back to our difference-in-differences regression. We were working with:
-
-$$
-y_{it} = \alpha + \beta_1 \cdot \text{post}_t + \beta_2 \cdot (\text{treated}_i \times \text{post}_t) + \beta_3 \cdot \text{treat}_i + \varepsilon_{it}
-$$
-
-This boils down to two regressions:
-
-- Control group: $y_{it} = \underbrace{(\alpha)}_{\alpha_{\text{control}}} + \beta_1 \cdot \text{post}_t + \varepsilon_{it}$
-- Treated group: $y_{it} = \underbrace{(\alpha + \beta_2)}_{\alpha_{\text{treatment}}} + (\beta_1 + \beta_3) \cdot \text{post}_t + \varepsilon_{it}$
-
-. . .
-
-Instead, we can give each respondent their own intercept and compare them to themselves over time:
-
-- Control group: $y_{it} = \underbrace{\alpha_i}_{\alpha_{\text{control}, i}} + \beta_1 \cdot \text{post}_t + \varepsilon_{it}$
-- Treated group: $y_{it} = \underbrace{(\alpha_i)}_{\alpha_{\text{treatment}, i}} + (\beta_1 + \beta_3) \cdot \text{post}_t + \varepsilon_{it}$
-
-Together:
-
-$$
-y_{it} = \alpha_i + \beta_1 \cdot \text{post}_t + \beta_2 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}
-$$
-
-. . .
-
-Notice what's *missing*: the standalone `treated` term. It's already absorbed by $\alpha_i$, because `treated` doesn't change over time for a given person — it's just one of their stable characteristics. The fixed effect has already done that work.
-
-## The within-group view
-
-Another way to think about it: for each group (here, a person), subtract their own average from their outcome.
+A second way to think about fixed effects: subtract each person's own average from each of their observations.
 
 ```{r}
 #| label: toy-within
@@ -771,13 +271,7 @@ toy <- toy |>
 toy
 ```
 
-Running `lm(opinion_demeaned ~ post_demeaned)` on the demeaned data gives *exactly* the same `post` coefficient as the dummy-variable regression. Unit fixed effects = "subtract each person's mean, then regress."
-
-. . .
-
-In words: unit fixed effects throw away all the *between-group* variation and use only the *within-group* movement to estimate the treatment effect. Any stable personal characteristic gets subtracted out in the demeaning step and cannot bias the treatment coefficient.
-
-## Let's double check
+Once we demean, person A's opinions become $-1$ and $+1$, person D's also become $-1$ and $+1$, and so on. The huge gap between their *baselines* is gone — what remains is each person's pre-to-post movement. Running `lm(opinion_demeaned ~ post_demeaned)` on the demeaned data gives *exactly* the same `post` coefficient as the dummy-variable regression:
 
 ```{r}
 #| label: toy-demean-fe
@@ -792,20 +286,24 @@ list(
   )
 ```
 
-## Doing this efficiently with `fixest`
+In words: unit fixed effects throw away all the *between-person* variation and use only the *within-person* movement to estimate the treatment effect. Stable personal characteristics get subtracted out in the demeaning step and cannot bias the treatment coefficient. Mr. A is no longer being compared to Mr. D — Mr. A is being compared to Mr. A.
 
-With 2,902 Danes, writing out 2,902 dummies is a bad idea. The `fixest` package handles fixed effects efficiently (using the "within" transformation under the hood, so it doesn't actually create 2,902 dummy variables):
+This intuition generalizes well beyond panels of individuals. Region fixed effects compare municipalities to other municipalities in the same region: when you look at Moroccan election data, you no longer compare the capital to the Sahara, you compare towns within Marrakech to other towns within Marrakech. Continent fixed effects compare countries within the same continent: Ghana gets compared to Côte d'Ivoire and Senegal, not to Vietnam. The closer the comparison group, the cleaner the estimate.
+
+### Doing this efficiently with `fixest`
+
+With 2,902 Danes, writing out 2,902 dummies is a bad idea — your regression table becomes unreadable and the computation is slow. The `fixest` package handles fixed effects efficiently: instead of literally fitting 2,902 dummies, it does the demeaning under the hood.
 
 ```{r}
 #| label: fixest-toy
 feols(opinion ~ post | id, data = toy)
 ```
 
-The `| id` part says "absorb a unit fixed effect for `id`." Same estimate as `lm(opinion ~ id + post, data = toy)`, but fast.
+The vertical bar `| id` means "absorb a unit fixed effect for `id`." Same `post` estimate as `lm(opinion ~ id + post, data = toy)`, but fast and tidy.
 
-## On the real data
+### Fixed effects inside difference-in-differences
 
-Let's run our difference-in-differences two ways: the plain interaction regression, then the same regression with a unit fixed effect per respondent.
+Back to the Danish panel. Let us run our difference-in-differences two ways: first the plain interaction regression we had before, then the same regression with a unit fixed effect per respondent.
 
 ```{r}
 #| label: fixest-danish
@@ -828,53 +326,31 @@ list(
   )
 ```
 
-- Same treatment-effect coefficient. The difference-in-differences number is unchanged.
-- But the unit fixed effect has absorbed every stable characteristic of each respondent — we're now identifying the effect from *within-person* movement only.
-- And notice the `treated` main effect disappeared in the second column: it's been swallowed by the respondent fixed effects.
+Two things to notice. First, the difference-in-differences coefficient (`Treated x Post`) is the same in both columns. Adding unit fixed effects did not change the headline number. Second, the standalone `Treated` term has disappeared from the second column. That is not a bug — `treated` is constant over time within a respondent, so it has been swallowed whole by the unit fixed effect. The model is now identifying the treatment effect from *within-person movement* only.
 
-# Time fixed effects
+## Time fixed effects
 
-## What was `post` actually doing?
-
-Look back at our regression:
+Look back at the difference-in-differences regression:
 
 $$
 y_{it} = \alpha + \beta_1 \cdot \text{treated}_i + \beta_2 \cdot \text{post}_t + \beta_3 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}
 $$
 
-- `post` is just a dummy for the second wave.
-- It's a **time fixed effect** with only two values.
+What is `post` actually doing? It is a dummy for the second wave. With only two waves it is just a single indicator, but conceptually it is a **time fixed effect** with two values. Time fixed effects absorb anything that hits *everyone* at the same moment — an economic shock, a media cycle, the weather, a national news event.
 
-. . .
-
-Time fixed effects absorb anything that hit *everyone* at the same moment — an economic shock, a news cycle, the weather.
-
-## Time fixed effects in general
-
-With more waves, we'd want one dummy per wave:
+With many waves we would generalize by giving each wave its own dummy:
 
 $$
 y_{it} = \alpha_i + \alpha_t + \beta \cdot T_{it} + \varepsilon_{it}
 $$
 
-- $\alpha_i$: unit fixed effect (person's own intercept).
-- $\alpha_t$: time fixed effect (wave-specific intercept).
-- $T_{it}$: 1 if person $i$ is in the treated group *and* wave $t$ is after the switch, 0 otherwise.
-- $\beta$: the effect of being treated in a treated period.
+where $\alpha_i$ is the unit fixed effect (a person's own intercept), $\alpha_t$ is the time fixed effect (a wave-specific intercept), and $T_{it}$ is 1 only if person $i$ is in the treated group *and* wave $t$ is after the switch. The coefficient $\beta$ captures the only thing not yet absorbed: the extra effect of being in a treated unit during a treated period.
 
-. . .
+This specification has a name — **two-way fixed effects** — and it is the workhorse of modern panel-data analysis.
 
-This specification is called **two-way fixed effects**: one set of dummies for units, one set for time.
+## Two-way fixed effects: same answer, more general
 
-## What each piece absorbs
-
-- **Unit fixed effects** $\alpha_i$: everything stable about a person (personality, baseline partisanship, deep values).
-- **Time fixed effects** $\alpha_t$: everything shared across people in a given period (the state of the economy, a media event, the weather).
-- **Treatment indicator** $T_{it}$: the only thing left is the "extra something" that hits treated units in treated periods.
-
-$\beta$ captures that extra something.
-
-## The punchline: same answer as the 2 × 2
+In the simple 2 × 2 case, all three forms — the interaction regression, the unit-fixed-effects version, and the two-way-fixed-effects version — give exactly the same estimate.
 
 ```{r}
 #| label: twfe-equal
@@ -904,27 +380,30 @@ list(
   )
 ```
 
-All three land on the same number. In the simple 2 × 2 case, **two-way fixed effects is difference-in-differences**.
+So why bother with the two-way-fixed-effects form if it gives the same number? Because it **scales** to situations the simple interaction does not handle:
 
-## Why bother with the two-way-fixed-effects form?
+- More than two waves (just keep adding wave fixed effects).
+- More than two groups (just keep adding unit fixed effects).
+- *Staggered* treatment, where different units get treated at different times — for instance, a study of US states where some adopt a policy in 2010, others in 2013, others never. The interaction form simply cannot handle this; the two-way-fixed-effects form can.
 
-Because it **scales** to situations the interaction form can't handle easily:
+A footnote on staggered designs: the recent econometrics literature (roughly 2020–2023) has identified subtle problems with the classical two-way-fixed-effects estimator when treatment timing varies across units. There are now better estimators in the staggered-treatment case. We will not cover them in this course, but be aware that "I just ran a two-way-fixed-effects regression" is no longer the end of the conversation when treatment timing varies — flag it for yourself if you ever build a project around staggered adoption.
 
-- more than two waves
-- more than two groups
-- different units getting treated at different times (*staggered* treatment)
+## A practical workflow for the final project
 
-. . .
+If you take a difference-in-differences or fixed-effects approach in your final project, a useful default is to present three regressions side by side, in increasing order of sophistication:
 
-With staggered treatment there are subtleties we won't cover in this course — there's a recent literature (around 2020–2023) that fixes problems with the classical two-way fixed effects estimator when treatment timing varies across units. 
+1. **Raw**: `outcome ~ treatment`. Just the headline difference, no fixed effects, no controls. This is what is easiest for a non-technical reader to understand, and it usually corresponds to a simple plot.
+2. **With fixed effects**: `feols(outcome ~ treatment | unit + region + ...)`, with whatever fixed-effect groupings make sense for your data. You hope the result stays similar; if it shifts substantially, prefer the fixed-effects column because the comparisons are more pointed.
+3. **With fixed effects and controls**: the same specification, plus the time-varying controls you want to adjust for.
+
+A sophisticated reader wants to see the whole progression, not just the most heavily controlled column at the end. Showing all three lets them follow how the estimate evolves as you tighten the comparison.
+
+When choosing fixed-effect groupings, finer is usually better — but only up to a point. New York City data: borough fixed effects compare Manhattan as a whole to the Bronx, which is fine, but neighborhood fixed effects compare Harlem to the Upper East Side, which is much sharper. Push as fine as your sample size allows. The constraint is that a group with only one observation effectively drops out of the regression: there is no within-group variation for the model to use. So go fine, but stop before your groups collapse to one observation each.
+
+One last point. **Even if you do not believe parallel trends — even if you are not making a causal argument at all — fixed effects are a good idea.** Adding them moves your comparisons within tighter, more similar groups (different years for the same person, different cities within the same region, different products within the same company), which gives you a cleaner estimate of the *association* between treatment and outcome even if you cannot claim causality. In nearly every applied setting, fixed effects make the estimate better, not worse.
 
 ## Wrap-up
 
-- Started with a **picture**: treated and control group, before and after. The widening of the gap *looked like* a party-switch effect.
-- **Difference-in-differences** formalizes that intuition: the 2 × 2 table, or equivalently a regression with an interaction term.
-- **Unit fixed effects** sharpen the design by isolating within-person variation: every stable personal characteristic is absorbed, so it cannot bias the treatment coefficient.
-- **Time fixed effects** generalize the `post` dummy to many periods and absorb anything that hit everyone at the same moment.
-- **Two-way fixed effects** = unit + time fixed effects. In the simple 2 × 2 case, it's the same number as the interaction regression, but it scales.
-- **Parallel trends** remains the crucial, untestable assumption behind all of these.
-- **Even without parallel trends, fixed effects are a good idea.** You make comparisons within groups that are more similar (different years within the same person, different cities within the same region, ...), so even if we can't claim causality, we can get a cleaner estimate of the association between treatment and outcome.
-- **Final project.** Typically, you run a very simple regression (`outcome ~ treatment`), then add fixed effects (`outcome ~ treatment | id, region, ...`), then add controls (`outcome ~ treatment + controls | id, region, ...`) and compare results.
+We started with a picture: a treated and a control group, before and after, with the gap widening. We turned the picture into a 2 × 2 table, then into a regression with an interaction term. **Difference-in-differences** is just that regression: it strips out the secular trend by using the control group's change as a counterfactual for what would have happened to the treated absent treatment. **Unit fixed effects** sharpen the design by absorbing every stable personal characteristic, leaving only within-person movement to identify the treatment effect. **Time fixed effects** generalize the `post` dummy to many periods, absorbing whatever hits everyone at once. **Two-way fixed effects** combine the two and scale gracefully to many groups, many periods, and staggered treatment timing. In the simple 2 × 2 case, all of these forms give the same number — but the more general form is the one to write, because it extends.
+
+Underneath all of this sits the **parallel-trends assumption**: that the control group's trend is a credible counterfactual for the treated group's trend. It is untestable in the strict sense — it is about a counterfactual world we never see — but we can do circumstantial checks by looking at pre-treatment trends. And even when we cannot defend parallel trends, fixed effects remain a useful tool for making cleaner comparisons.
