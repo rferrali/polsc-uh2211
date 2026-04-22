@@ -9,11 +9,14 @@
 .Rhistory
 .Rapp.history
 
+lectures/*_files
+
 # Session Data files
 .RData
 .RDataTmp
 
 docs/lectures/lecture-20-21*
+docs/lectures/lecture-22*
 .claude
 
 # User-specific files
