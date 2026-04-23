@@ -290,7 +290,27 @@ return to this assumption shortly.
 ## As a regression
 
 The 2 × 2 difference-in-differences has a tidy regression
-representation: just an interaction.
+representation: just an interaction. Writing $y_{it}$ for respondent
+$i$’s support at wave $t$, $\text{treated}_i$ for a dummy equal to one
+for Liberal/DPP supporters, and $\text{post}_t$ for a dummy equal to one
+at wave 3, the specification is:
+
+$$y_{it} = \alpha + \beta_1 \cdot \text{treated}_i + \beta_2 \cdot \text{post}_t + \beta_3 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}$$
+
+It is easier to read this if we split it by group. For control
+respondents ($\text{treated}_i = 0$):
+
+$$y_{it} = \underbrace{\alpha}_{\alpha_{\text{control}}} + \beta_2 \cdot \text{post}_t + \varepsilon_{it}$$
+
+For treated respondents ($\text{treated}_i = 1$):
+
+$$y_{it} = \underbrace{(\alpha + \beta_1)}_{\alpha_{\text{treated}}} + (\beta_2 + \beta_3) \cdot \text{post}_t + \varepsilon_{it}$$
+
+Each group gets its own intercept (different baseline support) and its
+own slope on `post` (different pre-to-post change). Control respondents
+move by $\beta_2$; treated respondents move by $\beta_2 + \beta_3$. The
+*extra* movement in the treated group — the difference-in-differences —
+is $\beta_3$.
 
 ``` r
 lm(benefit_cut_support ~ treated * post, data = danish_23) |>
@@ -366,19 +386,112 @@ lm(benefit_cut_support ~ treated * post, data = danish_23) |>
 Reading the four coefficients takes a bit of practice. A useful trick:
 ask “what does setting all the variables to zero correspond to?” Setting
 `treated = 0` and `post = 0` corresponds to a control respondent at wave
-2 — so the **intercept** is the average support for control respondents
-before the switch.
+2 — so the **intercept** ($\alpha$) is the average support for control
+respondents before the switch.
 
-- `treated`: the gap between treated and control respondents *before*
-  the switch — how much more right-wing voters supported cutting
-  benefits at baseline.
-- `post`: the pre-to-post change for the *control* group — our estimate
-  of the secular trend.
-- `treated:post`: the **difference-in-differences** itself — the extra
-  movement in the treated group, on top of the secular trend.
+- `treated` ($\beta_1$): the gap between treated and control respondents
+  *before* the switch — how much more right-wing voters supported
+  cutting benefits at baseline.
+- `post` ($\beta_2$): the pre-to-post change for the *control* group —
+  our estimate of the secular trend.
+- `treated:post` ($\beta_3$): the **difference-in-differences** itself —
+  the extra movement in the treated group, on top of the secular trend.
 
 Compare the four cell means above to these four coefficients and you
 will see they encode exactly the same information.
+
+A picture helps tie the formula to the data.
+<a href="#fig-did-counterfactual" class="quarto-xref">Figure 1</a> plots
+the four cell means and then draws a dashed line showing the
+counterfactual trajectory of the treated group — where they would have
+ended up if they had moved at the same pace as the control group. The
+vertical gap at wave 3 between the observed treated point and that
+dashed counterfactual is exactly the difference-in-differences.
+
+``` r
+cells <- danish_23 |>
+  group_by(treated, post) |>
+  summarize(
+    mean_support = mean(benefit_cut_support, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+control_delta <- cells$mean_support[cells$treated == 0 & cells$post == 1] -
+  cells$mean_support[cells$treated == 0 & cells$post == 0]
+treated_pre <- cells$mean_support[cells$treated == 1 & cells$post == 0]
+
+cf <- tibble(
+  post = c(0, 1),
+  mean_support = c(treated_pre, treated_pre + control_delta),
+  series = "Treated counterfactual"
+)
+
+observed <- cells |>
+  mutate(
+    series = ifelse(treated == 1, "Treated (V/DF)", "Control (other parties)")
+  ) |>
+  select(post, mean_support, series)
+
+bind_rows(observed, cf) |>
+  mutate(
+    wave_label = factor(
+      ifelse(post == 0, "Before (wave 2)", "After (wave 3)"),
+      levels = c("Before (wave 2)", "After (wave 3)")
+    ),
+    series = factor(
+      series,
+      levels = c(
+        "Treated (V/DF)",
+        "Control (other parties)",
+        "Treated counterfactual"
+      )
+    )
+  ) |>
+  ggplot(aes(
+    x = wave_label,
+    y = mean_support,
+    group = series,
+    color = series,
+    linetype = series
+  )) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  scale_linetype_manual(
+    values = c(
+      "Treated (V/DF)" = "solid",
+      "Control (other parties)" = "solid",
+      "Treated counterfactual" = "dashed"
+    )
+  ) +
+  scale_color_manual(
+    values = c(
+      "Treated (V/DF)" = "#D55E00",
+      "Control (other parties)" = "#0072B2",
+      "Treated counterfactual" = "#D55E00"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "Support for cutting unemployment benefits",
+    color = NULL,
+    linetype = NULL
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+<div id="fig-did-counterfactual">
+
+![](lecture-20-21_files/figure-commonmark/fig-did-counterfactual-1.png)
+
+Figure 1: Decomposing the difference-in-differences. Solid lines show
+observed pre-to-post movement for each group. The dashed line shows the
+counterfactual for the treated group — how they would have moved if they
+had followed the control group’s trend. The gap at wave 3 between the
+observed treated line and the dashed counterfactual is the estimated
+treatment effect.
+
+</div>
 
 ## The parallel-trends assumption
 
@@ -542,9 +655,17 @@ variable shifts the intercept for one group:
 
 $$y_i = \alpha + \beta_1 \cdot \text{female}_i + \beta_2 x_i + \varepsilon_i$$
 
-In this regression, `female` adds a constant to women’s predicted
-outcome — effectively, women get their own intercept. What if we did the
-same thing, but with one dummy per *individual*?
+Splitting this regression by group makes the intercept-shifting
+explicit:
+
+$$\begin{aligned}
+\text{Males:}   &\quad y_i = \underbrace{\alpha}_{\alpha_{\text{male}}} + \beta_2 x_i + \varepsilon_i \\
+\text{Females:} &\quad y_i = \underbrace{(\alpha + \beta_1)}_{\alpha_{\text{female}}} + \beta_2 x_i + \varepsilon_i
+\end{aligned}$$
+
+Men and women share the same slope $\beta_2$ on $x_i$, but each group
+has its own intercept: $\alpha$ for men, $\alpha + \beta_1$ for women.
+What if we did the same thing, but with one dummy per *individual*?
 
 ### A tiny toy panel
 
@@ -619,7 +740,20 @@ change* from pre to post: A went up by 2, B by 2, C by 1, D by 2, so the
 average is 1.75 — exactly what the regression reports. Each person is
 being compared to themselves.
 
-Those person-specific intercepts are called **unit fixed effects**.
+Splitting by individual shows the same structure as the male/female
+example above, but with one equation per respondent instead of one per
+gender:
+
+$$\begin{aligned}
+\text{Person A:} &\quad y_{A,t} = \underbrace{\text{Intercept}}_{\alpha_A} + \beta \cdot \text{post}_t + \varepsilon_{A,t} \\
+\text{Person B:} &\quad y_{B,t} = \underbrace{(\text{Intercept} + \text{idB})}_{\alpha_B} + \beta \cdot \text{post}_t + \varepsilon_{B,t} \\
+\text{Person C:} &\quad y_{C,t} = \underbrace{(\text{Intercept} + \text{idC})}_{\alpha_C} + \beta \cdot \text{post}_t + \varepsilon_{C,t} \\
+\text{Person D:} &\quad y_{D,t} = \underbrace{(\text{Intercept} + \text{idD})}_{\alpha_D} + \beta \cdot \text{post}_t + \varepsilon_{D,t}
+\end{aligned}$$
+
+Everyone gets their own intercept; everyone shares the same slope
+$\beta$ on `post`. Those person-specific intercepts are called **unit
+fixed effects**.
 
 ### What unit fixed effects buy us
 
@@ -631,6 +765,21 @@ characteristic does not change over time, it cannot bias the coefficient
 on a variable that does change over time, because the person’s fixed
 effect has already swallowed it.
 
+To see this algebraically, split a respondent’s characteristics into
+**time-varying** pieces $x_{it}$ (this month’s news consumption, current
+income) and **time-invariant** pieces $x_i$ (year of birth, gender,
+childhood socialization, deep personality traits). A regression with
+both kinds of variables looks like:
+
+$$y_{it} = \alpha + \beta_1 \cdot \text{income}_{it} + \beta_2 \cdot \text{female}_i + \beta_3 \cdot \text{birthplace}_i + \varepsilon_{it}$$
+
+Unit fixed effects replace the whole collection of time-invariant
+variables — the $\beta_2 \text{female}_i$, the
+$\beta_3 \text{birthplace}_i$, and everything else about the person we
+can or cannot measure — with a single per-person intercept $\alpha_i$:
+
+$$y_{it} = \alpha_i + \beta_1 \cdot \text{income}_{it} + \varepsilon_{it}$$
+
 Said differently: if I want to estimate the effect of some treatment on
 an outcome, the cleanest possible comparison is the same person before
 and after treatment. You cannot get more comparable than that. Unit
@@ -640,12 +789,16 @@ practicum: there we never observed the same respondent twice.
 
 There is a constraint that comes with this. You cannot include any
 **time-invariant** variable (like `female`, or birthplace, or year of
-birth) in a regression that already has unit fixed effects. The fixed
-effect has already absorbed the effect of being a particular person,
-which includes the effect of being female, the effect of being from
-Aarhus, and so on. Trying to estimate the gender effect on top of the
-unit effect is asking the regression to separate two things that are
-perfectly collinear — and it cannot.
+birth) in a regression that already has unit fixed effects. The
+following specification simply cannot be estimated:
+
+$$y_{it} = \alpha_i + \beta_1 \cdot \text{income}_{it} + \beta_2 \cdot \text{female}_i + \varepsilon_{it}$$
+
+The fixed effect $\alpha_i$ has already absorbed the effect of being a
+particular person, which includes the effect of being female, the effect
+of being from Aarhus, and so on. Trying to estimate the gender effect on
+top of the unit effect is asking the regression to separate two things
+that are perfectly collinear — and it cannot.
 
 ### The within-group view
 
@@ -834,9 +987,26 @@ and tidy.
 
 ### Fixed effects inside difference-in-differences
 
-Back to the Danish panel. Let us run our difference-in-differences two
-ways: first the plain interaction regression we had before, then the
-same regression with a unit fixed effect per respondent.
+Back to the Danish panel. The plain difference-in-differences regression
+was
+
+$$y_{it} = \alpha + \beta_1 \cdot \text{treated}_i + \beta_2 \cdot \text{post}_t + \beta_3 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}$$
+
+The piece $\alpha + \beta_1 \cdot \text{treated}_i$ depends only on
+stable respondent characteristics — being Liberal/DPP or not — so it is
+exactly the kind of thing a unit fixed effect absorbs. Swap it for
+$\alpha_i$ and you get:
+
+$$y_{it} = \alpha_i + \beta_2 \cdot \text{post}_t + \beta_3 \cdot (\text{treated}_i \times \text{post}_t) + \varepsilon_{it}$$
+
+Two things have happened. The standalone `treated` term has dropped out:
+it is time-invariant within a respondent, so it is already absorbed. The
+interaction term has *not* dropped out, because it does vary within
+respondent — it is zero at wave 2 and one at wave 3 for treated
+respondents. That is the coefficient we care about.
+
+Let us run both specifications side by side and confirm the
+treatment-effect coefficient is unchanged.
 
 ``` r
 list(
@@ -953,12 +1123,20 @@ $$y_{it} = \alpha_i + \alpha_t + \beta \cdot T_{it} + \varepsilon_{it}$$
 where $\alpha_i$ is the unit fixed effect (a person’s own intercept),
 $\alpha_t$ is the time fixed effect (a wave-specific intercept), and
 $T_{it}$ is 1 only if person $i$ is in the treated group *and* wave $t$
-is after the switch. The coefficient $\beta$ captures the only thing not
-yet absorbed: the extra effect of being in a treated unit during a
-treated period.
+is after the switch. It is worth pausing on what each piece absorbs:
 
-This specification has a name — **two-way fixed effects** — and it is
-the workhorse of modern panel-data analysis.
+- **Unit fixed effects** $\alpha_i$ soak up everything stable about a
+  person — personality, baseline partisanship, deep values, education
+  for adults, anything we cannot measure.
+- **Time fixed effects** $\alpha_t$ soak up everything shared across
+  people in a given period — the state of the economy, a media cycle,
+  the weather, a national news event.
+- **Treatment indicator** $T_{it}$ is what remains: the “extra
+  something” that hits treated units in treated periods.
+
+The coefficient $\beta$ captures that extra something. This
+specification has a name — **two-way fixed effects** — and it is the
+workhorse of modern panel-data analysis.
 
 ## Two-way fixed effects: same answer, more general
 
