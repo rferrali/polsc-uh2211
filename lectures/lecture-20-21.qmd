@@ -4,6 +4,9 @@ title: "Lecture 20-21: Time series"
 
 ```{r}
 #| label: setup
+#| message: false
+#| warning: false
+#| echo: false
 library(tidyverse)
 library(modelsummary)
 library(fixest)

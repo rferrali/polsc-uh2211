@@ -1,0 +1,432 @@
+---
+title: "Lecture 22: Text analysis"
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+# install.packages(c("tidyverse", "tidytext", "quanteda", "stm", "ggwordcloud", "httr2", "tinytable"))
+library(tidyverse)
+library(tidytext)
+library(quanteda)
+library(quanteda.textstats)
+library(stm)
+library(ggwordcloud)
+library(httr2)
+library(tinytable)
+
+theme_set(theme_minimal(base_size = 14))
+```
+
+The next few lectures are about new sources of data: text today, then networks, then geospatial data (we will not get to images and video). The recipe is always the same — take this kind of data, which we call **unstructured** because it is not already in the shape of a table, and turn it into a table so that the regressions and visualizations you already know how to make become available again. Today's flavor of unstructured data is text: presidential speeches, party manifestos, legislative debates, tweets, news articles, court opinions, open-ended survey responses. There is more text in political science than in almost any other social science. Politicians talk a lot, and because they are important, what they say gets recorded. The state itself runs on paper: nearly everything a government does is written down somewhere. We have an embarrassment of text to mine.
+
+Today we will take a single corpus — the inaugural addresses of all US presidents — and analyze it three ways, using three generations of tools:
+
+- A 1960s tool: **dictionaries**, where you count words tagged in advance as positive or negative.
+- A 2000s tool: **statistical topic models**, where you let the data find clusters of words that travel together.
+- A 2020s tool: **large language models**, where you describe a task to the model in plain English and let it do the work.
+
+Same corpus, same paragraphs, three different lenses. The interesting question is not which tool wins — they have different strengths and they answer slightly different questions — but how each one frames the same text differently.
+
+## The corpus: US inaugural addresses
+
+The `quanteda` package ships with a corpus of US inaugural addresses, conveniently spanning the entire history of the office.
+
+```{r}
+#| label: load-corpus
+#| echo: true
+inaugural <- data_corpus_inaugural
+length(inaugural)
+range(docvars(inaugural, "Year"))
+```
+
+Sixty speeches, Washington in 1789 through to the present day. Pulling out a single example to remind ourselves what the data looks like:
+
+```{r}
+#| label: sample-quote
+#| echo: true
+as.character(inaugural["1961-Kennedy"]) |>
+  str_wrap() |>
+  str_sub(1, 250)
+```
+
+The first 250 characters of Kennedy's 1961 address are mostly thank-yous before the famous content kicks in. That is typical of the genre.
+
+### From speeches to paragraphs
+
+Sixty documents is plenty for some questions but uncomfortably few for others — a topic model fit on sixty documents will struggle. A common preprocessing step is to split each speech into paragraphs and discard any paragraphs that are too short to mean anything. We end up with about 1,500 documents of more workable length, which most text-analysis tools handle gracefully.
+
+```{r}
+#| label: reshape
+#| echo: true
+paras <- corpus_reshape(inaugural, to = "paragraphs")
+paras <- paras[ntoken(paras) >= 20]
+
+length(paras)
+```
+
+### Building a word-count table
+
+The standard representation of a corpus for statistical analysis is a **document-feature matrix**: rows are documents (here, paragraphs), columns are words, cells are the count of how many times the word appears in the document. Word order is gone — we are treating each document as a "bag of words." That sounds like a heavy loss, and for some questions it is, but for a surprising number of analyses the bag-of-words representation is enough.
+
+Two preprocessing steps matter a lot for the quality of what comes out. The first is removing **stopwords** — common function words like "the," "of," "and," "is" — which appear constantly and convey almost nothing about what a document is about. Every text-analysis package ships with a default list of these. The second is removing domain-specific **filler**: words that are too universal *for the corpus you happen to be working with* to differentiate documents. In US inaugural addresses, almost every paragraph contains *nation*, *government*, *country*, *union*, *states*, *America*, *American*, *fellow*, *citizens*. Leaving them in would mean every "topic" is partly about America — uninformative, because so is every other topic. The general principle: keep words that differentiate documents from each other; throw away words everyone uses.
+
+```{r}
+#| label: dfm
+filler <- c(
+  "will", "shall", "upon", "must", "may", "can", "us", "let", "one", "every",
+  "now", "also", "well", "even", "ever", "never", "make", "made", "first",
+  "much", "many", "still", "yet", "long", "whole", "part", "common", "just",
+  "right", "best", "high", "without", "today", "among", "know", "way", "time",
+  "years", "year", "day", "days", "people", "government", "nation", "country",
+  "union", "states", "state", "american", "americans", "america", "united",
+  "president", "fellow", "citizens", "citizen", "public", "national",
+  "administration", "principles", "duty", "duties", "power", "support",
+  "interests", "confidence", "hope", "faith", "life", "spirit", "great",
+  "good", "new", "old", "system", "history", "future", "men", "man"
+)
+
+toks <- paras |>
+  tokens(remove_punct = TRUE, remove_numbers = TRUE) |>
+  tokens_tolower() |>
+  tokens_remove(c(stopwords("en"), filler)) |>
+  tokens_select(min_nchar = 4)
+
+dfm_paras <- dfm(toks)
+dfm_paras
+```
+
+The matrix that comes out has about 1,500 rows and around 9,000 columns. It is also extremely sparse: the vast majority of the 13 million cells are zero. That is just how language works — we use a small number of words a lot ("the"), and an enormous tail of words almost never. There are perfectly real English words like *vicissitudes* that occur once in a corpus this size, or sometimes never, even though English speakers know what they mean.
+
+## Approach 1: dictionary-based sentiment
+
+A **dictionary** is a pre-made list of words tagged as positive or negative. The procedure is unglamorous: split each paragraph into words, look up each word in the dictionary, and count how many positives and how many negatives you saw. To get a single per-paragraph score, take (positive − negative) divided by the total number of sentiment words found, so that long and short paragraphs are comparable.
+
+```{r}
+#| label: sentiment-score
+#| echo: true
+para_df <- tibble(
+  doc_id = docnames(paras),
+  Year = docvars(paras, "Year"),
+  President = docvars(paras, "President"),
+  text = as.character(paras)
+)
+
+para_sentiment <- para_df |>
+  unnest_tokens(word, text) |>
+  inner_join(get_sentiments("bing"), by = "word") |>
+  count(doc_id, Year, President, sentiment) |>
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) |>
+  mutate(
+    total = positive + negative,
+    rate = (positive - negative) / pmax(total, 1)
+  )
+```
+
+The dictionary I am using here is called `bing` (named after Bing Liu, the researcher who built it — not the search engine). Aggregating up from paragraphs to entire speeches and plotting the net positive share over 230 years:
+
+```{r}
+#| label: fig-sentiment
+#| fig-height: 4
+speech_sentiment <- para_sentiment |>
+  group_by(Year, President) |>
+  summarise(
+    pos = sum(positive),
+    neg = sum(negative),
+    rate = (pos - neg) / (pos + neg),
+    .groups = "drop"
+  )
+
+ggplot(speech_sentiment, aes(Year, rate)) +
+  geom_vline(
+    xintercept = c(1861, 1917, 1941, 2001),
+    linetype = "dashed",
+    color = "grey70"
+  ) +
+  geom_line(color = "grey60") +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "steelblue") +
+  labs(
+    x = NULL,
+    y = "Net positive share",
+    title = "Net positive word share in US inaugural addresses",
+    subtitle = "Dashed lines: 1861, 1917, 1941, 2001"
+  )
+```
+
+The dashed lines mark four moments when the United States entered a major war — the Civil War (1861), the First World War (1917), the Second World War (1941), and the start of the post-9/11 era (2001) — and you can see clear dips in sentiment at each. A reassuring sanity check that the dictionary is picking up something real.
+
+The strengths of the dictionary approach are honesty and scale. Every step is transparent: you can read the word list, you can audit which words contributed to each score, and the whole pipeline is fast and free. If you need to score billions of tweets, this might be the only thing your laptop can do in finite time.
+
+The weaknesses are the obvious ones. The dictionary reads one word at a time. It cannot see **negation** ("not good" registers as positive, because *good* is in the positive list). It cannot see **sarcasm** ("great job" can be negative in context, but the dictionary just sees *great*). It cannot see **domain meaning**: *war* is always negative in the dictionary, even when a president is honoring veterans for their courage. The dictionary is fast and honest, but it reads at the level of words, not the level of meaning.
+
+## Approach 2: statistical topic models
+
+A statistical **topic model** turns the dictionary approach on its head: instead of giving the model a pre-built list of words, you let the data tell you which words travel together. The intuition is that words about the same underlying topic tend to co-occur in the same documents. If a paragraph is about war, you expect to see *war* and *peace* and *missiles* together. If a paragraph is about the economy, you expect *growth* and *bank* and *interest rate* together. A topic model formalizes this: each topic is a distribution over words (a "bag of words" again), each document is a mixture of topics, and the model learns both at once from the co-occurrence patterns in the data.
+
+The catch is that you have to tell the model how many topics to look for. Pick K too small and you blur distinct themes together; pick K too large and you split a single theme across redundant clusters. There is no formula that picks K for you — it really is a hunch, and you check by squinting at the topics that come out and asking whether they make sense. I tried K from 3 to 10 on this corpus and settled on 6 because that was the value where the topics looked the most interpretable to me.
+
+```{r}
+#| label: stm-fit
+#| cache: true
+#| message: false
+stm_dfm <- dfm_paras |>
+  dfm_trim(min_docfreq = 10)
+stm_dfm <- stm_dfm[rowSums(stm_dfm) > 0, ]
+
+stm_in <- convert(stm_dfm, to = "stm")
+
+topic_model <- stm(
+  documents = stm_in$documents,
+  vocab = stm_in$vocab,
+  K = 6,
+  init.type = "Spectral",
+  seed = 2026,
+  verbose = FALSE
+)
+```
+
+To understand each topic, we look at the words it weighs most heavily. A word cloud per topic, with size proportional to weight:
+
+```{r}
+#| label: fig-wordclouds
+#| fig-height: 5
+#| fig-width: 10
+topic_labels <- c(
+  "1. Renewal & opportunity",
+  "2. Foreign relations",
+  "3. Institutions & political thought",
+  "4. The presidential oath",
+  "5. Freedom & democracy",
+  "6. Law & economy"
+)
+
+top_terms <- tidytext::tidy(topic_model, matrix = "beta") |>
+  group_by(topic) |>
+  slice_max(beta, n = 20) |>
+  ungroup() |>
+  mutate(topic_label = factor(topic_labels[topic], levels = topic_labels))
+
+ggplot(top_terms, aes(label = term, size = beta, color = beta)) +
+  geom_text_wordcloud(rm_outside = TRUE) +
+  scale_size_area(max_size = 9) +
+  scale_color_viridis_c() +
+  facet_wrap(~topic_label, nrow = 2) +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"))
+```
+
+The labels above the word clouds are mine, not the model's. The model gives you the word clusters; *you* squint at each cluster, decide what unifies the words, and write a label on top. Some of the labels are obvious (topic 5 is clearly *freedom and democracy*), others are judgment calls. Topic 1 is something like "renewal and opportunity" — it includes *opportunity*, *promise*, *generation*, *heart*, *lives*, *courage*, but also *work*, which I am not entirely sure belongs there. Maybe the right label is something else and I am just bending the words to my preferred reading. This is honest art, not exact science.
+
+Once the model has assigned each paragraph a mixture of topics, we can ask how the topical mix has shifted across two centuries of inaugural addresses.
+
+```{r}
+#| label: fig-topics
+#| fig-height: 4
+topic_props <- topic_model$theta |>
+  as_tibble(.name_repair = ~ paste0("topic_", seq_along(.x))) |>
+  mutate(Year = docvars(stm_dfm, "Year")) |>
+  pivot_longer(starts_with("topic_"), names_to = "topic", values_to = "prop") |>
+  mutate(
+    topic_num = as.integer(str_remove(topic, "topic_")),
+    topic_label = factor(topic_labels[topic_num], levels = topic_labels)
+  ) |>
+  group_by(Year, topic_label) |>
+  summarise(share = mean(prop), .groups = "drop")
+
+ggplot(topic_props, aes(Year, share, fill = topic_label)) +
+  geom_area(position = "fill") +
+  scale_fill_viridis_d(option = "turbo") +
+  labs(
+    x = NULL,
+    y = "Share of paragraph content",
+    fill = NULL,
+    title = "What inaugural addresses talked about, by year"
+  )
+```
+
+The visible story: inaugural addresses used to talk a lot about law and economy and the institutional machinery of government, and they have shifted, over two centuries, toward freedom and democracy as the dominant rhetorical register.
+
+It is worth being honest about the limitations of topic models. K is a guess. Labels are an interpretive act, not a model output. Results wiggle with the random seed and with preprocessing choices: change which words you remove, or rerun the same model with a different seed, and the topics will shift, sometimes a little and sometimes a lot. None of this makes topic models useless — they surface structure you did not have to specify, which is a real superpower — but they should be presented with the same humility as any qualitative coding scheme.
+
+## Approach 3: large language models
+
+The third generation of tool simply asks a language model to read each paragraph and tell us what it is about. No word lists, no co-occurrence matrices — just a careful prompt and a pre-defined output schema.
+
+This works well, but it costs money (every call to a commercial model is metered), and the model is opaque (you cannot easily explain why it gave a particular paragraph a particular label). The trade-off versus dictionaries and topic models is roughly: more nuance, less reproducibility, more cost.
+
+### Authenticating
+
+To call a commercial model from R, you need an API key — a long random string that identifies your account and is charged for every request. You should treat it like a password: never paste it into a script that you commit to git, and never share it in a screenshot. The standard approach is to put it in a special file called `.Renviron` in the project root, which R reads at startup and exposes to your code as an environment variable.
+
+In this repository there is a file called `.Renviron.example` showing the expected format. Copy it to a file called `.Renviron`, paste your own Gemini API key in, and restart R. The key I am using here is mine — please get your own from Google AI Studio if you want to follow along, since every call against my key costs me money.
+
+```{r}
+#| label: gemini-setup
+key <- Sys.getenv("GEMINI_KEY") # loaded from .Renviron — never hard-code
+
+endpoint <- paste0(
+  "https://generativelanguage.googleapis.com/v1beta/",
+  "models/gemini-2.5-flash:generateContent"
+)
+
+base_req <- request(endpoint) |>
+  req_headers(
+    "x-goog-api-key" = key,
+    "Content-Type" = "application/json"
+  ) |>
+  req_retry(
+    max_tries = 5,
+    is_transient = \(resp) resp_status(resp) %in% c(429, 500, 503)
+  ) |>
+  req_throttle(rate = 15 / 60)
+```
+
+The request setup will look familiar from the web-scraping lecture: `req_headers` sets up authentication, `req_retry` handles transient failures (the model server may be temporarily overloaded and return 503; retrying after a short wait usually fixes it), and `req_throttle` keeps us under Gemini's free-tier rate limit of 15 requests per minute.
+
+### Picking an example paragraph
+
+To illustrate, let us pick one paragraph from Obama's 2009 address — a paragraph that mentions *crisis*, since the 2009 inauguration came at the height of the financial crisis.
+
+```{r}
+#| label: pick-example
+obama <- paras |> corpus_subset(Year == 2009 & President == "Obama")
+idx <- which(str_detect(as.character(obama), "crisis"))[1]
+
+example_id <- docnames(obama)[idx]
+example_text <- as.character(obama)[idx]
+```
+
+> Obama, 2009: `r example_text`
+
+### Building the request
+
+The request to Gemini is a JSON document with two parts: the **prompt** (what we are asking the model to do) and the **generation config** (how we want the answer back). The prompt is just text — we describe the task, give a list of allowed topics, show an example, and hand it the paragraph to classify.
+
+The generation config is what makes this useful for analysis at scale. Without it, the model's reply would be free text — sometimes a single word, sometimes a paragraph of explanation, often inconsistent across calls. We do not want that. We want the model to return a JSON object with exactly the structure we will use downstream. Two settings get us there: `responseMimeType = "application/json"` tells the model to return JSON instead of plain text, and `responseSchema` declares the exact shape that JSON must have. Here we say: the response is an object with two required fields, `topic` (one of seven specific strings) and `confidence` (a number).
+
+```{r}
+#| label: gemini-body
+topics_enum <- c(
+  "economy",
+  "foreign_policy",
+  "national_unity",
+  "liberty_and_rights",
+  "religion_and_values",
+  "government_and_reform",
+  "other"
+)
+
+prompt <- paste0(
+  "Classify this paragraph from a US presidential inaugural address ",
+  "into exactly one topic from the list.\n\n",
+  'Example: "Let every nation know ... we shall pay any price" ',
+  '-> {"topic": "foreign_policy", "confidence": 0.95}\n\n',
+  "Paragraph: ",
+  example_text
+)
+
+body <- list(
+  contents = list(list(parts = list(list(text = prompt)))),
+  generationConfig = list(
+    responseMimeType = "application/json",
+    responseSchema = list(
+      type = "object",
+      properties = list(
+        topic = list(type = "string", enum = as.list(topics_enum)),
+        confidence = list(type = "number")
+      ),
+      required = list("topic", "confidence")
+    )
+  )
+)
+```
+
+A schema-constrained response is the difference between asking ChatGPT in a browser ("what's this paragraph about?") and using the API for an analysis you can run on thousands of documents and reliably parse afterwards.
+
+### Sending and parsing
+
+```{r}
+#| label: gemini-call
+#| cache: true
+resp <- base_req |>
+  req_body_json(body) |>
+  req_perform()
+
+raw <- resp_body_json(resp)
+str(raw, max.level = 4)
+```
+
+The reply is a deeply nested object. The actual answer is buried at `raw$candidates[[1]]$content$parts[[1]]$text`, and that text itself is a JSON string — so we have to parse it twice, once to peel off the outer envelope and once again to recover the structured topic and confidence.
+
+```{r}
+#| label: gemini-parse
+answer_text <- raw$candidates[[1]]$content$parts[[1]]$text
+answer_text
+
+llm_answer <- jsonlite::fromJSON(answer_text)
+llm_answer
+```
+
+### Three tools, one paragraph
+
+Stacking up the three tools' verdicts on the same Obama 2009 paragraph:
+
+> Obama, 2009: `r example_text`
+
+```{r}
+#| label: tbl-comparison
+dict_score <- para_sentiment |>
+  filter(doc_id == example_id) |>
+  pull(rate)
+
+stm_idx <- which(docnames(stm_dfm) == example_id)
+stm_topic_num <- which.max(topic_model$theta[stm_idx, ])
+
+tibble(
+  Method = c("Dictionary (bing)", "Statistical topic model", "Gemini"),
+  Output = c(
+    sprintf("net positive share = %.2f", dict_score),
+    sprintf(
+      "%s (%.0f%%)",
+      topic_labels[stm_topic_num],
+      100 * topic_model$theta[stm_idx, stm_topic_num]
+    ),
+    sprintf("%s (confidence %.2f)", llm_answer$topic, llm_answer$confidence)
+  )
+) |>
+  tt()
+```
+
+Three tools, three different framings of the same paragraph. The dictionary reads it word by word and registers the cluster of crisis-era negative words. The topic model picks up its *rhetorical register* — the language of renewal and opportunity that Obama leaned on heavily in 2009. The language model names its *subject matter*: this paragraph is about the economy. None of these answers is wrong; they are answers to slightly different questions.
+
+## Trade-offs and a pragmatic workflow
+
+Lining up the three approaches:
+
+| Method | Strengths | Weaknesses |
+|---|---|---|
+| Dictionary | Transparent, free, fast — scales to billions of items | Reads one word at a time; no negation, sarcasm, or context |
+| Statistical topic model | Finds structure unsupervised | You pick K and label by squinting; results wiggle with seed and preprocessing |
+| Large language model | Reads in context, flexible, structured output | Opaque, costs money per call, less reproducible |
+
+No tool is best in general. Pick the one that matches your question, your corpus size, and your budget.
+
+A pragmatic pattern that has emerged in industry and increasingly in research: **combine** the cheap and the expensive tools. Suppose you have a billion tweets and want to study political ones. Running every tweet through a language model would cost a fortune. Instead, run a fast and cheap topic model first to filter the billion down to (say) two thousand candidate political tweets. Then run those two thousand through the language model for high-quality classification. You may miss a few political tweets at the filtering step, but with a billion tweets the loss does not matter. Topic models for filtering, language models for quality.
+
+The same pattern shows up in many other settings. The general lesson is that these tools are complements, not substitutes. The 1960s tool, the 2000s tool, and the 2020s tool all stay in your kit.
+
+## Beyond classification
+
+Classification is only one of many things you can do with text. With a bit of imagination, language models will turn any text into structured rows in a table you can analyze. A few examples to plant the seed:
+
+- **Entity extraction.** Read a corpus of news articles and pull out, from each, the people, organizations, and locations mentioned.
+- **Relation extraction.** Read a corpus of legal opinions and identify, for each citation to a prior case, whether the opinion is endorsing or criticizing it.
+- **Free-text-to-structure.** A small personal example: I built a couples' to-do list app where one of you can write "watch *The Lord of the Rings* tonight" and the system uses a language model to extract that *The Lord of the Rings* is a movie, queries the IMDb API for the rating and runtime, and adds the metadata to the entry. The natural-language description becomes a structured task.
+
+Whatever the task, the underlying move is the one we keep coming back to: turn unstructured data into a table, then bring all the regression and visualization tools you already know to bear on it.
+
+## Takeaways
+
+Text analysis is the same recipe as everything else in this course: turn the data into a table, then use the tools you already have. The three generations of tools — dictionaries, topic models, large language models — make different assumptions and answer slightly different questions. They complement each other; none of them is a magic wand. Language models are powerful and increasingly cheap, but the older tools still earn their place when you need transparency, scale, or a hypothesis-free first look at what is in your corpus.
