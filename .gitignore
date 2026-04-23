@@ -4,6 +4,7 @@
 *.pdf
 !assets/*.pdf
 *.html
+/docs/lectures/lecture-23*
 
 # History files
 .Rhistory
