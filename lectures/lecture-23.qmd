@@ -1,64 +1,46 @@
 ---
 title: "Lecture 23: Spatial analysis"
-format: revealjs
 ---
 
 ```{r}
 #| label: setup
 #| message: false
 #| warning: false
-#| echo: false
+#| echo: true
 # install.packages(c("sf", "rnaturalearth", "rnaturalearthdata", "maps", "patchwork"))
 library(tidyverse)
-library(sf)
-library(rnaturalearth)
-library(maps)
-library(patchwork)
+library(sf) # main spatial package
+library(rnaturalearth) # map data
+library(maps) # map data
+library(patchwork) # combine ggplots
+
+theme_set(theme_minimal(base_size = 14))
 ```
 
-# Spatial data as tables
+This is the third stop on our short tour of unstructured data. Text was the first flavor, networks the second, and today we land on **spatial data**: anything where a row in your eventual table has a location attached to it. The recipe is the same as it has always been in this course — take data that does not start out in the shape of a table, turn it into one, and then bring all the regression and visualization tools you already know to bear on it.
 
-## The recipe, again
+Political scientists end up with spatial data more often than they expect. Electoral districts and the entire literature on **gerrymandering** start there. Gerrymandering is the practice of drawing electoral district boundaries to engineer election outcomes — for example, a Republican-leaning state legislature could split a strongly Democratic city like Houston in two, attaching each half to a much larger rural Republican area, so that two safely Republican districts emerge where a fairer map would have produced one Democratic and one Republican district. That kind of question is unavoidable as soon as you have polygons and votes. Conflict events from datasets like ACLED, protest locations, and migration flows are inherently geocoded. Many of the most useful regressors in comparative politics are spatial: distance to the capital as a proxy for state reach, distance to the nearest border, distance to the nearest active conflict event. Even an ordinary survey can be made spatial by geocoding respondents to their neighborhood and merging in features of that neighborhood. Once the data sits in a table with a location column, the rest of your toolkit applies unchanged.
 
-- Take unstructured data.
-- Turn it into a table.
-- Apply the regression and visualization tools you already know.
+## Two flavors of geometry
 
-Today's flavor: **spatial data**.
+Spatial data come in two main shapes. **Polygons** have an interior and a boundary — countries, electoral districts, census tracts, watersheds. **Points** are single locations — events, cities, geocoded respondents. Lines (roads, rivers, pipelines) exist too, but we will not cover them today. Both shapes live happily in R inside the **sf** package — short for *simple features* — and the trick that makes everything work is that an `sf` object is just a data frame with one extra column called `geometry` that holds the shape.
 
-## Why political scientists care
+### Polygons: a world map from `rnaturalearth`
 
-- Electoral districts and gerrymandering
-- Conflict events (ACLED), protest locations
-- Migration flows, border crossings
-- "Distance to capital" or "distance to border" as regressors
-- Neighborhood-level policy effects
-
-. . .
-
-Once the data is in a table, everything else in your toolkit applies.
-
-# Two geometry types
-
-## Polygons vs. points
-
-- **Polygons** have an interior and a boundary.
-  Countries, districts, census tracts, watersheds.
-- **Points** are single locations.
-  Events, cities, geocoded respondents.
-- Lines (roads, rivers) exist too — we won't cover them today.
-
-You all handle them with the `sf` package; basically, a `data.frame` with special map columns.
-
-## An sf object *is* a data frame
+The `rnaturalearth` package bundles a clean polygon dataset of the world's countries. Reading it in gives us back something that prints almost like a normal data frame, except for a small header announcing that it is also a spatial object.
 
 ```{r}
 #| echo: true
-# the "rnaturalearth" package provides map data; we'll use it
 countries <- ne_countries(scale = "medium", returnclass = "sf")
 countries
+```
 
-# modifiy the data frame as usual
+The header tells you four things: it is a *simple feature collection*; how many features (rows) and fields (columns) it has; the geometry type — here, **multi-polygon** — and a *bounding box*, which is the smallest rectangle in coordinate space that contains every shape in the dataset. A multi-polygon is just several polygons treated as a single feature: think of the United Arab Emirates, whose territory includes both the mainland and the Musandam exclave on the other side of Oman, and which therefore needs two polygons to represent one country.
+
+Beyond that header, this is a regular data frame, and every tidyverse verb works on it without modification. Let me add a column for GDP per capita the way I would on any other dataset.
+
+```{r}
+#| echo: true
 countries <- countries |>
   mutate(gdp_pc = gdp_md * 1e6 / pop_est)
 
@@ -67,39 +49,52 @@ countries |>
   head(3)
 ```
 
-The only new column is `geometry`. Every tidyverse verb works unchanged.
+Notice how the `geometry` column stays attached even though I never selected it: `sf` carries the geometry through every operation by default, so you do not have to think about it. That is the whole point of having a special class — it lets you keep working with familiar tidyverse verbs while the spatial information rides along for free.
 
-## Let's plot this! 
+### Plotting polygons
+
+Plotting these polygons is essentially a one-liner in `ggplot2`. The relevant geom is `geom_sf`, which knows how to render whatever is in the geometry column. Let us start with a naive map and improve it step by step.
 
 ```{r}
 #| echo: true
 #| fig-height: 3.8
 countries |>
+  filter(name != "Antarctica") |>
+  mutate(
+    gdp_pc = cut(
+      gdp_pc,
+      breaks = c(0, 1000, 5000, 20000, 100000, Inf),
+      labels = c("<1k", "1k-5k", "5k-20k", "20k-100k", ">100k")
+    )
+  ) |>
   ggplot(aes(fill = gdp_pc)) +
   geom_sf(color = "white", linewidth = 0.1) +
-  scale_fill_viridis_c(
-    name = "GDP per capita (USD)",
-    trans = "log10",
-    labels = scales::comma
-  )
+  theme_void() +
+  theme(legend.position = "bottom") +
+  scale_fill_viridis_d(name = "GDP per capita (USD)")
 ```
 
-## Points from lat/lon
+Four small decisions in this plot are worth pausing on, because they all compound:
 
-Any data frame with coordinates becomes an sf object via `st_as_sf()`:
+The first is dropping **Antarctica**. The Natural Earth dataset includes it as a country, and because the dataset has no real GDP for it, Antarctica ends up with a misleading per-capita value that paints the entire south of the map in the highest-income shade. The honest fix is to filter it out — almost no political question we care about touches it anyway.
+
+The second is `theme_void()`. By default `ggplot2` draws a gray background and an x/y axis with degree labels. That is appropriate for a scatterplot, not for a map: nobody reads "longitude 47" off a world map. `theme_void()` strips all of that away and leaves just the geography.
+
+The third is **moving the legend to the bottom**. Maps tend to be wider than they are tall, so a side legend wastes horizontal space. Bottom legends use that space more efficiently.
+
+The fourth — and the most important — is **binning GDP per capita** rather than mapping it to a continuous gradient. Continuous fill scales feel natural, but with quantities that span orders of magnitude (the richest countries have roughly a hundred times the GDP per capita of the poorest), they squash most of the world into one or two indistinguishable shades. Professional cartographers almost always prefer discrete bins, because the human eye is much better at telling distinct colors apart than at reading position along a gradient. Bins also force the reader to register *meaningful* differences — Russia is in a different bracket from India, the Sahel is in a different bracket from coastal West Africa — rather than vague shading. A log scale is a partial fix, but binning is cleaner. The base R function `cut` makes this trivial: hand it a set of breakpoints and it returns a categorical variable you can map to `fill`.
+
+### Points: capitals from the `maps` package
+
+Points come into R as a regular data frame with latitude and longitude columns, which we promote to an `sf` object with `st_as_sf`. The `maps` package ships a list of world cities; we filter down to capitals.
 
 ```{r}
 #| echo: true
-# likewise, the maps package provides city data; we'll use it for points
 capitals <- maps::world.cities |>
-  # select only capital cities
   filter(capital == 1) |>
-  # convert to sf object
+  as_tibble() |>
   st_as_sf(
-    # indicate which columns hold the coordinates
     coords = c("long", "lat"),
-    # indicate the coordinate reference system (CRS) of the input data
-    # this data uses lat/lon in degrees, so we specify the WGS84 geographic CRS
     crs = 4326
   )
 
@@ -108,36 +103,43 @@ capitals |>
   head(3)
 ```
 
-Same structure: rows of attributes, plus a `geometry` column.
+Two arguments do the work in `st_as_sf`. The `coords` argument tells it which columns hold the coordinates — and notice what happens after the conversion: the `long` and `lat` columns disappear from the data frame and are replaced by a single `geometry` column of points. The `crs` argument announces which coordinate system those numbers were recorded in, which we will unpack in a moment; for now it is enough to know that `4326` is the standard latitude/longitude reference used by GPS.
 
-## Let's plot the points too!
+Plotting points alone gives us a map that looks unmoored — just dots floating in empty coordinate space. The cure is to draw the country polygons underneath the points in the same plot, layering two `geom_sf` calls.
 
 ```{r}
 #| echo: true
 ggplot(capitals) +
-  geom_sf(color = "steelblue", size = 1)
+  geom_sf(color = "steelblue", size = 1) +
+  geom_sf(data = countries, fill = NA, color = "gray50", linewidth = 0.1) +
+  theme_void()
 ```
 
-# The difficulties of working with spatial data
+Note one detail of `ggplot2` we have not stressed before: each `geom_*` call can have its own `data =` argument. Here the outer `ggplot(capitals)` sets the default data to the points; the second `geom_sf` overrides it with the countries dataset to draw the borders underneath. This is the standard pattern for combining several spatial layers — points on top of polygons on top of a basemap, each with its own source.
 
-## Various file formats
+## What makes spatial data hard
 
-- **Shapefile** (`.shp` + `.dbf` + `.shx` + ...). Old ESRI standard; multi-file; 10-char column-name limit.
-- **GeoJSON** (`.geojson`). Plain text; web-friendly; one file.
-- **GeoPackage** (`.gpkg`). Modern SQLite-based single-file standard. Prefer this.
-- **KML / KMZ**. Legacy Google Earth.
+If you compare spatial work to text analysis, the difficulty is reversed. With text, getting the data into R is easy — it is just strings — and the hard part is wringing meaning out of those strings. With spatial data the operations themselves are usually straightforward (joining, distance, filtering), and the hard part is loading the data correctly in the first place. Two ugly facts about the field do most of the damage.
 
-The `sf` package can read and write all of these with `st_read()` and `st_write()`.
+### File formats are a museum
 
-## Various coordinate reference systems (CRS)
+Spatial data has been around forever, and good map data is expensive to make, which means a lot of it is locked in old proprietary formats that have never quite died. You will mostly meet four:
 
-The earth is not flat. Every map is a compromise between:
+The most common — and sadly the oldest — is the **shapefile**, originally an ESRI format. A single shapefile is not actually one file but a small folder full of them: `.shp` (the geometry), `.dbf` (the attribute table), `.shx` (an index), and several others, all of which must be present together for the file to be readable. Column names in the attribute table are also limited to ten characters, which is the kind of constraint that you only discover after it has truncated something important.
 
-- preserving **angles** (shape),
-- preserving **areas**,
-- preserving **distances**.
+**GeoJSON** (`.geojson`) is plain text and looks a lot like the JSON we saw in the web-scraping lecture. You can open it in any text editor and see what is inside, which makes it pleasant to debug. It is what most modern web APIs return.
 
-A *coordinate reference system* (CRS) tells you which compromise was made.
+**GeoPackage** (`.gpkg`) is a single-file format built on SQLite. It is the modern standard, it is open, it embeds the coordinate system metadata correctly, and if you get to choose your output format, this is the one to pick.
+
+**KML/KMZ** is the legacy Google Earth format. You will see it occasionally in older datasets.
+
+The good news is that `sf` reads and writes all of these through a uniform pair of functions, `st_read()` and `st_write()`. Whatever your file is, you point `st_read` at it and you get back an `sf` object.
+
+If you ever need to *make* a map yourself — for instance to digitize an old paper map from an archive — the workhorse desktop tools are **ArcGIS** (the commercial standard, made by ESRI) and **QGIS** (its free, open-source equivalent). For everything we will do in this course R is enough, but for serious cartography most working geographers use one of those.
+
+### Coordinate reference systems
+
+The other thing that makes spatial data hard is that the Earth is not flat, and every map is a compromise. You cannot lay a sphere onto a rectangle without distorting at least one of three things: shape, area, or distance. A **coordinate reference system** (CRS) records which compromise was made and how the resulting flat coordinates relate back to real positions on the globe.
 
 ```{r}
 #| echo: false
@@ -157,50 +159,47 @@ p2 <- ggplot(countries_robinson) +
 p1 + p2
 ```
 
+(A small aside on the figure above: those are two `ggplot` objects, `p1` and `p2`, displayed side by side using the `patchwork` package. Once `patchwork` is loaded, adding two plots with `+` arranges them next to each other, and you can build more elaborate layouts — say, a two-by-two grid — by combining `+`, `/`, and parentheses. Worth knowing the moment you want to show two maps, or a map and a chart, in a single figure.)
 
-## Why should we care about CRSs? 
+The map on the left is the familiar **Mercator** projection, the one you grew up with: a flat rectangle where lines of longitude run as straight verticals. The price is that it preserves angles at the cost of badly distorting area. Greenland looks the size of Africa; Antarctica swells into a massive band along the bottom; countries near the equator appear smaller than they really are. The map on the right is the **Robinson** projection, which is approximately equal-area: every country covers a screen area roughly proportional to its real size on the globe. Antarctica becomes a strip rather than a continent.
 
-- Geospatial data does not make sense if you don't know the CRS used to report it. 
-- `sf` converts everything to a common CRS under the hood. 
-- Most modern formats (GeoJSON, GeoPackage) include CRS metadata, but some other formats do not.
-- If you encounter issues like points not appearing on the map, or not appearing where they should, it's likely a CRS mismatch.
+The same set of polygons, reshaped into the two projections, has different numerical coordinates in each. So when a file shows up on your computer with a column of x and y values, those numbers are meaningless until you know which coordinate system they live in.
 
-# Spatial joins
+Most modern formats — GeoJSON, GeoPackage — embed that metadata, so `sf` reads it and converts everything to a common reference system under the hood. Older shapefiles, and any data you constructed yourself from a spreadsheet of latitudes and longitudes, may not. When `sf` does not know the system, you have to declare it (that is what `crs = 4326` did when we built the capitals dataset earlier).
 
-## The question
+The way you usually realize you have the wrong system is visual. You plot your points on a map and they all show up in the wrong continent — Moroccan cities scattered across Australia, or every survey respondent in the middle of the ocean. That is the symptom of a coordinate-system mismatch. The fix is unglamorous: read the dataset's documentation if there is any, ask whoever made it, and otherwise try the few most common systems for the region until the points land where they should.
 
-> Which country does each capital fall in?
+## Spatial joins
 
-Point-in-polygon. The operation that lets point-level data inherit polygon-level attributes:
+Because an `sf` object behaves like a data frame, all the joins from earlier in the course still work — `left_join` on a country code merges country-level GDP into a survey, no different from any other join. What is *new* with spatial data is a join based on geometry rather than on a shared key. Suppose you have a survey where each respondent has GPS coordinates but no neighborhood label. You want to know which neighborhood each respondent lives in so that you can merge in neighborhood-level features. Doing this by hand for thousands of respondents is unthinkable. Doing it spatially is one line of R: drop each respondent's point on the neighborhood map, find the polygon it falls inside, and inherit the polygon's attributes.
 
-- country GDP,
-- district partisanship,
-- region dummies.
-
-## `st_join()`
+That operation is a **spatial join**, and `sf` provides it as `st_join`.
 
 ```{r}
 #| echo: true
 countries_trim <- countries |>
   select(country = admin, continent, gdp_pc)
 
-capitals_joined <- st_join(capitals, countries_trim, join = st_within)
+capitals_mini <- capitals |> select(name, pop)
+capitals_joined <- st_join(capitals_mini, countries_trim, join = st_within)
 
 capitals_joined
 ```
 
-## Other predicates
+Read the result carefully: the capitals dataset started with just the city's name and population; after the join it has the country, the continent, and GDP per capita merged in. None of those columns came from a shared key — they came from each capital city's geometry falling inside a country polygon. That is the whole magic of the spatial join: it lets point-level data inherit polygon-level attributes through geography alone.
 
-- `st_within` — point inside polygon
-- `st_intersects` — any overlap (polygons with polygons)
-- `st_contains` — polygon wholly contains another
-- `st_touches` — shared boundary, no interior overlap
+The optional `join` argument controls how `sf` decides whether two features are related. The most common predicates are:
 
-Pick the predicate that matches the question.
+- `st_within` — a point lies inside a polygon (what we used here).
+- `st_intersects` — two shapes have any overlap at all.
+- `st_contains` — one polygon wholly encloses another.
+- `st_touches` — two shapes share a boundary but no interior.
 
-# Distance matrix
+Pick the predicate that matches the question you are actually asking. A respondent inside a neighborhood: `st_within`. Two electoral districts that share a border: `st_touches`. A protest event that falls anywhere in a province: `st_intersects`.
 
-## `st_distance()`
+## Distances
+
+The other thing you can do with spatial data that you cannot do without it is compute distances. The function `st_distance` takes a set of points (or polygons) and returns a matrix of pairwise distances, with proper physical units attached.
 
 ```{r}
 #| echo: true
@@ -212,20 +211,30 @@ D <- st_distance(african_caps, african_caps)
 dim(D)
 ```
 
-An $n \times n$ matrix of pairwise distances, with units attached.
+We get a square $n \times n$ matrix where $D_{ij}$ is the distance from capital $i$ to capital $j$. The diagonal is zero (every city is zero kilometers from itself); the matrix is symmetric.
 
-## Political-science uses
+A distance matrix on its own is not very interesting — the fact that Accra is about 900 kilometers from Abuja is a piece of trivia, not an analysis. What makes distance matrices useful is that they let you build **regressors** that depend on geography. A few examples that show up repeatedly in political science:
 
-- **Distance to capital** as a regressor (common in gravity and state-capacity papers).
-- **Distance to border** in migration work.
-- **Distance to nearest conflict event** to measure exposure or spillovers.
+- **Distance to capital** as a measure of state reach. Areas farther from the capital tend to receive less public investment, fewer state services, and to have weaker tax enforcement; many state-capacity papers start from this regressor.
+- **Distance to the nearest border** in migration and trade work, where the gravity model says interaction falls off with distance.
+- **Distance to the nearest active conflict event**, used to measure exposure or spillovers in studies of how conflict affects civilian behavior, voting, or attitudes.
 
-# Wrap-up
+A concrete example from my own research. In a project on a new agricultural technology in Uganda, I wanted to know whether someone's decision to adopt was influenced by their literal next-door neighbors. To build that measure I computed the distance matrix between every respondent and every other respondent, and then constructed, for each respondent, a weighted average of *other* respondents' adoption decisions, weighted by **inverse distance**. Inverse distance weighting puts most of the weight on people who live close to you and almost no weight on people far away. The intuition is direct — neighbors plausibly influence each other; strangers across the country plausibly do not — and the distance matrix is the only thing that makes the regressor possible to compute.
 
-## What to take home
+## When distance is the wrong tool
 
-- Spatial data is a **table with a geometry column**.
-- **CRS matters.** Geographic for storage, projected for computation.
-- **Bins beat gradients.** Normalize counts by population.
-- `sf` is your entry point.
+Before you reach for a distance matrix, it is worth asking whether **distance is what your question is really about**. Political science is mostly about administrative boundaries, and administrative boundaries cut through space in ways that pure distance ignores.
 
+Consider two New Yorkers who live a few blocks apart, one in the very north of Manhattan and one just across the river in the south Bronx. By distance they are neighbors. But politically they live in different worlds: they vote for different borough presidents, their trash is collected by different sanitation districts, and the city services they receive depend on which side of the boundary they fall on. A North Korean and a South Korean within walking distance of each other lead lives that have almost nothing in common. For most political-science questions about *who gets what*, the answer hinges on which polygon contains you, not on how far you are from anything in particular. Distance is what matters for logistics — how long does it take to get there, how expensive is it to ship — but for politics it is usually the wrong tool.
+
+That makes the spatial-join workflow we saw earlier the more useful default for political-science projects. If a student is studying the geographic distribution of environmental projects in New York, the right move is usually not a distance matrix between projects, but a spatial join from the projects to a neighborhood map, followed by simple counts: how many projects in Harlem, how many in the Upper East Side, how many in Bushwick. Once each project carries a neighborhood label, every regression and visualization tool from earlier in the course is back in play, and you can ask the question that actually matters — *do some neighborhoods get more than others, and why?* — using only counts and group means.
+
+## Wrap-up
+
+Spatial data is the same recipe as everything else in this course: a data frame with one extra column for geometry. Polygons and points cover almost everything you need; lines exist but we skipped them. The `sf` package and `geom_sf` keep the rest of your tidyverse and `ggplot2` knowledge fully usable.
+
+The hard part of working with spatial data is not analysis but loading. File formats are a museum: prefer GeoPackage or GeoJSON, tolerate shapefiles when you must. Coordinate reference systems are the silent killer: most of the time `sf` handles them for you, and the moment your points end up in the wrong ocean, suspect a coordinate-system mismatch first.
+
+Two operations are genuinely new with spatial data. **Spatial joins** let points inherit polygon attributes through geography, which is the right tool for almost every political-science project that needs to merge in neighborhood, district, or country features. **Distance matrices** let you build regressors based on proximity, which is powerful when proximity is what you actually want — and it is worth remembering that, for most political questions, administrative boundaries matter more than raw distance, so the spatial join is usually the workhorse and the distance matrix the specialist.
+
+For most projects in this course, maps are illustrative — a way to show your reader where the action is happening, not a substitute for the regressions and tables that carry the analytical argument. Make the map clean (drop polygons that distort the story, use bins instead of gradients, strip the axes with `theme_void`), put it near the start of your report to set the stage, and then move on to the rows-and-columns analysis the rest of the course has been building toward.

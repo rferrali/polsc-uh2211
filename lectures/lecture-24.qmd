@@ -1,0 +1,438 @@
+---
+title: "Lecture 24: Network analysis"
+format: revealjs
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+#| echo: false
+# install.packages(c("igraph", "igraphdata", "netrankr"))
+library(tidyverse)
+library(igraph)
+library(igraphdata)
+library(netrankr)
+```
+
+# Networks as tables
+
+## The recipe, again
+
+- Take unstructured data.
+- Turn it into a table.
+- Apply the regression and visualization tools you already know.
+
+Today's flavor: **networks**.
+
+## Why political scientists care
+
+- Coalitions in a legislature
+- Treaties and alliances between states
+- Citations between Supreme Court decisions
+- Trade flows
+- Retweet graphs during a protest
+- Donor relationships among campaign donors
+
+. . .
+
+Once each node has features, the regression toolkit applies unchanged.
+
+# Two ingredients
+
+## A network is just
+
+- **Nodes** (vertices) — the entities
+- **Edges** (ties) — the relationships between them
+
+. . .
+
+The flavor of the network determines what you can do with it.
+
+## Three axes of variation
+
+- **Directed vs undirected**
+- **Weighted vs unweighted**
+- **Single-layer vs multi-layer**
+
+. . .
+
+A guessing game with platforms you already use.
+
+## Directed vs undirected
+
+- Twitter follows — **directed** (one-way is allowed)
+- Facebook friends — **undirected** (mutual by construction)
+- LinkedIn connections — **undirected**
+- Snapchat best friends — **directed**, asymmetric
+- Phone calls / email — **directed**
+
+. . .
+
+Question: does the relationship go both ways?
+
+## Weighted vs unweighted
+
+- "Are we friends?" → **unweighted** (yes/no)
+- "How many messages this month?" → **weighted**
+- Trade volume between countries → **weighted**
+- Coauthorship counts → **weighted**
+
+. . .
+
+Question: does the edge carry a strength?
+
+## Single- vs multi-layer
+
+- Facebook friends ≠ messages ≠ likes ≠ tagged-in-photo
+- Same nodes, several kinds of ties
+
+. . .
+
+Today: single-layer only.
+
+## Why this matters
+
+- Most tools assume a specific flavor.
+- Centrality is defined slightly differently on directed vs undirected graphs.
+- Many canonical models assume undirected, unweighted, single-layer.
+
+. . .
+
+Always ask: *what kind of network do I have?*
+
+# Storing networks
+
+## Edge list
+
+```{r}
+#| echo: true
+edges <- tribble(
+  ~from , ~to ,
+  "A"   , "B" ,
+  "A"   , "C" ,
+  "B"   , "C" ,
+  "C"   , "D" ,
+  "D"   , "E"
+)
+edges
+```
+
+One row per edge. Edge attributes go in extra columns.
+
+## Adjacency matrix
+
+```{r}
+#| echo: true
+g_toy <- graph_from_data_frame(edges, directed = FALSE)
+as_adjacency_matrix(g_toy, sparse = FALSE)
+```
+
+$n \times n$. Symmetric for undirected graphs. Mostly zeros.
+
+## Edge lists win at scale
+
+- Real networks are **sparse**.
+- Facebook: ~3 billion users, ~few hundred friends each.
+
+. . .
+
+- Adjacency matrix: ~$9 \times 10^{18}$ cells
+- Edge list: ~$10^{11}$ rows
+
+. . .
+
+Edge lists are the right way to store a network on disk.
+
+## Reading network data
+
+- `graph_from_data_frame(edges, vertices = nodes)` for an edge list
+- `graph_from_adjacency_matrix(A)` for a matrix
+- Both return the same `igraph` object
+
+# A running example
+
+## Zachary's karate club
+
+- 34 members of a 1970s American university karate club
+- Friendship ties collected by Wayne Zachary
+- The club **split into two factions** during data collection
+- The standard test case in network science
+
+## Loading it
+
+```{r}
+#| echo: true
+data(karate)
+karate
+```
+
+`UNW-` = **U**ndirected, **N**amed, **W**eighted. `Faction` is a node attribute.
+
+# Visualizing networks
+
+## Node coordinates aren't in the data
+
+- An edge list says **who** is connected to **whom**.
+- It does *not* say where to put each node on a page.
+
+. . .
+
+Layout algorithms decide.
+
+## Default `igraph` layout
+
+```{r}
+#| echo: true
+#| fig-width: 6
+#| fig-height: 5
+set.seed(2026)
+plot(karate, vertex.size = 12, vertex.label.cex = 0.7)
+```
+
+## Force-directed (Fruchterman–Reingold)
+
+- Connected nodes attract.
+- Disconnected nodes repel.
+- The two factions emerge as visual clusters — *the algorithm did not know about them*.
+
+## Tree layout
+
+```{r}
+#| echo: true
+#| fig-width: 6
+#| fig-height: 5
+plot(
+  karate,
+  layout = layout_as_tree(karate),
+  vertex.size = 12,
+  vertex.label.cex = 0.7
+)
+```
+
+## Same data, different story
+
+- The karate club is **not** a tree.
+- The layout imposed a hierarchy that isn't there.
+- Right call for trees; wrong for almost anything else.
+
+. . .
+
+Layout = an authorial choice.
+
+## Polish: degree-sized, faction-colored
+
+```{r}
+#| echo: true
+#| fig-width: 6
+#| fig-height: 5
+set.seed(2026)
+plot(
+  karate,
+  vertex.size = 5 + 1.5 * degree(karate),
+  vertex.color = ifelse(V(karate)$Faction == 1, "steelblue", "tomato"),
+  vertex.label.cex = 0.7,
+  edge.width = 0.5
+)
+```
+
+# Networks in regression
+
+## From network to regressors
+
+- Extract a **node table**: one row per node.
+- Each derived feature is a column.
+- The rest is regression as usual.
+
+## Three centrality measures
+
+- **Degree** — number of edges. Popularity / activity.
+- **Betweenness** — how often you sit on shortest paths. Broker / gatekeeper.
+- **Closeness** — average graph-distance to everyone. Information-speed.
+
+## Computing them
+
+```{r}
+#| echo: true
+karate_nodes <- tibble(
+  member = V(karate)$name,
+  faction = V(karate)$Faction,
+  degree = degree(karate),
+  between = betweenness(karate),
+  closeness = closeness(karate)
+)
+
+karate_nodes |> arrange(desc(degree)) |> head(8)
+```
+
+Mr Hi (instructor) and John A (president) lead — the two factional leaders.
+
+# Peer effects
+
+## The question
+
+> Does my outcome depend on my **neighbors'** outcomes?
+
+Examples:
+
+- Friends start running marathons → do you?
+- Trading partners adopt the euro → do you?
+- A close friend becomes obese → do you?
+
+## Linear-in-means model
+
+$$
+y_i = \alpha + \beta x_i + \gamma\, \bar y_{N(i)} + \varepsilon_i
+$$
+
+- $\bar y_{N(i)}$ — average outcome among $i$'s network neighbors.
+- $\gamma$ — peer-effect coefficient.
+
+. . .
+
+Same shape as the inverse-distance regression from lecture 23 — only the meaning of "neighbor" changed.
+
+## A real network with a real outcome
+
+**Padgett's Florentine families (1430s):**
+
+- 16 elite families in Renaissance Florence
+- Marriage network from genealogical records
+- Wealth in 1000s of lira from the 1427 *catasto* (tax records)
+- The data behind Padgett & Ansell's classic *"Robust action and the rise of the Medici"* (1993)
+
+## Loading the data
+
+The dataset ships with R's `network` package — the canonical home of social-network data on CRAN.
+
+```{r}
+#| echo: true
+#| message: false
+data(florentine_m, package = "netrankr")
+flo <- florentine_m
+flo
+```
+
+`wealth`, `priorates`, `totalties` are real attributes from the 1427 *catasto*, attached to the network by the package authors.
+
+## The marriage network
+
+```{r}
+#| echo: true
+#| fig-width: 7
+#| fig-height: 5
+set.seed(2026)
+plot(
+  flo,
+  vertex.size = 4 + sqrt(V(flo)$wealth) * 1.5,
+  vertex.label.cex = 0.7,
+  edge.width = 0.6
+)
+```
+
+Pucci (wealth 3) is isolated — no marriage ties.
+
+## Building the "neighbors' mean" regressor
+
+```{r}
+#| echo: true
+A <- as_adjacency_matrix(flo, sparse = FALSE)
+deg <- pmax(rowSums(A), 1) # avoid divide-by-zero for Pucci
+W <- A / deg # row-normalized adjacency
+
+flo_data <- tibble(
+  family = V(flo)$name,
+  wealth = V(flo)$wealth,
+  neighbor_wealth = as.numeric(W %*% V(flo)$wealth),
+  has_neighbors = rowSums(A) > 0
+)
+
+head(flo_data)
+```
+
+One matrix multiplication = the neighbor-mean column for the entire dataset.
+
+## The regression
+
+```{r}
+#| echo: true
+flo_reg <- flo_data |> filter(has_neighbors)
+
+lm(wealth ~ neighbor_wealth, data = flo_reg) |>
+  summary()
+```
+
+A positive, large coefficient on `neighbor_wealth`.
+
+## What did we just estimate?
+
+- Families connected to wealthy in-laws are themselves wealthy.
+- $\hat\gamma > 0$, statistically significant.
+
+. . .
+
+But did wealth **spread through marriage**, or did wealthy families **marry each other**?
+
+# Why peer effects are hard
+
+## The reflection problem (Manski 1993)
+
+- Your friends affect you.
+- You affect your friends.
+- $y_i$ and $\bar y_{N(i)}$ are determined together.
+
+. . .
+
+A regression coefficient comes out — its causal interpretation is muddled.
+
+## Homophily
+
+- People connect to others **like them**.
+- Rich families marry rich families.
+- The correlation reflects **selection**, not influence.
+
+## A devastating gut-check
+
+**Cohen-Cole & Fletcher (2008)** ran the Christakis–Fowler peer-effects regression on:
+
+- acne
+- height
+- headaches
+
+. . .
+
+They found significant "peer effects" in all three.
+
+. . .
+
+None of these can spread through friendships.
+
+## What actually identifies peer effects
+
+A design that breaks selection:
+
+- Random roommate assignment in dorms
+- Randomized seeding in a development experiment
+- Exogenous shocks that hit some neighbors but not others
+
+. . .
+
+Without one of those, treat $\hat\gamma$ as **descriptive**, not causal.
+
+# Wrap-up
+
+## Take home
+
+- Networks = a node table with derived features.
+- New regressors: **centrality** (degree, betweenness, closeness) and **neighbors' means**.
+- Layouts are an authorial choice; force-directed is the safe default.
+- Peer-effects coefficients are easy to estimate and hard to interpret.
+
+## Skipped on purpose
+
+- Directed-network methods
+- Dynamic networks (ties forming and dissolving)
+- Community detection
+- Network-generating models (Erdős–Rényi, preferential attachment, ERGMs)
+
+`igraph` will be there when you need them.
